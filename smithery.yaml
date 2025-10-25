@@ -1,20 +1,12 @@
 version: 1
-name: DOI Resolver MCP
+name: DOI MCP
 description: Resolve and verify articles using the DOI REST API
-author: Thomas F. Scharff
-homepage: https://github.com/tfscharff/doi-mcp
+author: Your Name
 repository: https://github.com/tfscharff/doi-mcp
 
-tools:
-  - name: resolve_doi
-    description: Resolve a DOI to get article metadata
-  - name: search_articles
-    description: Search for articles by title, author, or keywords
-  - name: get_metadata
-    description: Get detailed article metadata including authors, journal, and abstract
+runtime: typescript
 
-runtime: python
 startCommand:
-  command: python
+  command: node
   args:
-    - server.py
+    - server.js

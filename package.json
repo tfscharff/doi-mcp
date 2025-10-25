@@ -1,0 +1,18 @@
+{
+  "name": "doi-mcp",
+  "version": "1.0.0",
+  "description": "DOI MCP server for verifying and citing articles",
+  "type": "module",
+  "main": "server.js",
+  "bin": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "node-fetch": "^3.3.0"
+  }
+}
