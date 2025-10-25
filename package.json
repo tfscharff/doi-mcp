@@ -1,18 +1,35 @@
 {
-  "name": "doi-mcp",
+  "name": "doi-citation-verifier-mcp",
   "version": "1.0.0",
-  "description": "DOI MCP server for verifying and citing articles",
+  "description": "MCP server that prevents citation hallucination by verifying academic citations against CrossRef database",
   "type": "module",
-  "module": "./server.js",
-  "main": "server.js",
-  "bin": "server.js",
+  "main": "dist/index.js",
   "scripts": {
-    "start": "node server.js"
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "prepare": "npm run build"
+  },
+  "keywords": [
+    "mcp",
+    "doi",
+    "citations",
+    "academic",
+    "research",
+    "verification",
+    "anti-hallucination",
+    "fact-checking"
+  ],
+  "author": "tfscharff",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.7",
+    "typescript": "^5.4.5"
   },
   "engines": {
     "node": ">=18.0.0"
-  },
-  "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.0"
   }
 }
