@@ -134,7 +134,7 @@ export default function createServer({ config }: { config?: z.infer<typeof confi
           // Author match
           if (authors && authors.length > 0) {
             const matchedAuthors = authors.filter(a => 
-              resultAuthors.some(ra => ra.includes(a.toLowerCase().split(" ").pop() || ""))
+              resultAuthors.some((ra: string) => ra.includes(a.toLowerCase().split(" ").pop() || ""))
             );
             score += matchedAuthors.length * 2;
           }
@@ -298,7 +298,6 @@ export default function createServer({ config }: { config?: z.infer<typeof confi
   server.registerPrompt(
     "citation-verification-rules",
     {
-      name: "Citation Verification Rules",
       description: "Rules for preventing citation hallucination",
     },
     async () => ({
