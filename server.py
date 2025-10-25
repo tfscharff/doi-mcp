@@ -210,7 +210,7 @@ async def call_tool(name: str, arguments: dict) -> list[ToolResult]:
             )]
     
     except Exception as e:
-        logger.error(f"Error calling tool {name}: {str(e)}")
+        logger.error(f"Error calling tool {name}: {str(e)}", exc_info=True)
         return [ToolResult(
             content=[TextContent(type="text", text=f"Error: {str(e)}")],
             isError=True
@@ -219,15 +219,21 @@ async def call_tool(name: str, arguments: dict) -> list[ToolResult]:
 async def main():
     """Run the MCP server."""
     logger.info("Starting DOI Resolver MCP server")
-    async with server:
-        logger.info("DOI Resolver MCP server is running")
-        await server.wait_for_shutdown()
+    try:
+        async with server:
+            logger.info("DOI Resolver MCP server initialized and ready")
+            await server.wait_for_shutdown()
+    except asyncio.CancelledError:
+        logger.info("Server cancelled")
+    except Exception as e:
+        logger.error(f"Server error: {e}", exc_info=True)
+        raise
 
 if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        logger.info("Server shut down")
+        logger.info("Server shut down by user")
     except Exception as e:
         logger.error(f"Fatal error: {e}", exc_info=True)
         sys.exit(1)

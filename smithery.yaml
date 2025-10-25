@@ -14,7 +14,6 @@ tools:
     description: Get detailed article metadata including authors, journal, and abstract
 
 runtime: python
-
 startCommand:
   command: python
   args:
