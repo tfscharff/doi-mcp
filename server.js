@@ -10,7 +10,6 @@ import {
   CallToolRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import fetch from "node-fetch";
 
 const DOI_API_BASE = "https://api.crossref.org/v1";
 const DOI_CONTENT_NEGOTIATION = "https://doi.org";
