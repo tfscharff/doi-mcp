@@ -13,8 +13,12 @@ tools:
   - name: get_metadata
     description: Get detailed article metadata including authors, journal, and abstract
 
-entrypoint: server.py
-runtime: python3.11
+runtime: python
+
+startCommand:
+  command: python
+  args:
+    - server.py
 
 dependencies:
   - mcp>=0.1.0
