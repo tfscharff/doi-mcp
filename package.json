@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "DOI MCP server for verifying and citing articles",
   "type": "module",
+  "module": "./server.js",
   "main": "server.js",
   "bin": "server.js",
   "scripts": {
