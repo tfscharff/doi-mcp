@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-DOI Resolver MCP Server
+DOI MCP Server
 Queries the DOI REST API to retrieve and verify article metadata.
 """
 
@@ -221,22 +221,28 @@ async def call_tool(name: str, arguments: dict) -> list[ToolResult]:
 
 async def main():
     """Run the MCP server."""
-    logger.info("Starting DOI Resolver MCP server")
+    logger.info("Starting DOI MCP server")
+    logger.info(f"Python version: {sys.version}")
+    logger.info("Waiting for client connection...")
+    
     try:
         async with server:
-            logger.info("DOI Resolver MCP server initialized and ready")
+            logger.info("DOI MCP server initialized and ready")
             await server.wait_for_shutdown()
     except asyncio.CancelledError:
         logger.info("Server cancelled")
+        sys.exit(0)
+    except KeyboardInterrupt:
+        logger.info("Server interrupted")
+        sys.exit(0)
     except Exception as e:
         logger.error(f"Server error: {e}", exc_info=True)
-        raise
+        sys.exit(1)
 
 if __name__ == "__main__":
+    logger.info("DOI MCP Server startup script")
     try:
         asyncio.run(main())
-    except KeyboardInterrupt:
-        logger.info("Server shut down by user")
     except Exception as e:
         logger.error(f"Fatal error: {e}", exc_info=True)
         sys.exit(1)
