@@ -1,5 +1,7 @@
 # DOI Citation Verifier MCP Server
 
+[![smithery badge](https://smithery.ai/badge/@tfscharff/doi-mcp)](https://smithery.ai/server/@tfscharff/doi-mcp)
+
 A Model Context Protocol (MCP) server that **prevents citation hallucination** by forcing verification of academic citations before they're mentioned. This server makes Claude verify every citation against real publications in the CrossRef database.
 
 ## The Problem This Solves
@@ -83,10 +85,12 @@ Optional configuration:
 
 ## Installation
 
-### Install via Smithery
+### Installing via Smithery
+
+To install DOI Citation Verifier automatically via [Smithery](https://smithery.ai/server/@tfscharff/doi-mcp):
 
 ```bash
-npx @smithery/cli install doi-mcp --client claude
+npx -y @smithery/cli install @tfscharff/doi-mcp
 ```
 
 ### Manual Installation
