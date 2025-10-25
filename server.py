@@ -31,7 +31,7 @@ DOI_CONTENT_NEGOTIATION = "https://doi.org"
 
 # HTTP client with timeout and headers
 HEADERS = {
-    "User-Agent": "DOI-MCP/1.0 (mailto:thomas.f.scharff@gmail.com)",
+    "User-Agent": "DOI-MCP/1.0 (mailto:user@example.com)",
     "Accept": "application/json"
 }
 
@@ -107,16 +107,17 @@ async def get_article_metadata(doi: str) -> dict[str, Any]:
 @server.list_tools()
 async def list_tools() -> list[Tool]:
     """List available tools."""
-    return [
+    logger.info("list_tools called")
+    tools = [
         Tool(
             name="resolve_doi",
-            description="Resolve a DOI to get article metadata including title, authors, publication date, and URL",
+            description="Resolve a DOI to get article metadata",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "doi": {
                         "type": "string",
-                        "description": "The DOI (e.g., '10.1038/nature12373' or 'https://doi.org/10.1038/nature12373')"
+                        "description": "The DOI (e.g., '10.1038/nature12373')"
                     }
                 },
                 "required": ["doi"]
@@ -124,17 +125,17 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="search_articles",
-            description="Search for articles by title, author, keyword, or other metadata",
+            description="Search for articles by query",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "query": {
                         "type": "string",
-                        "description": "Search query (e.g., 'machine learning', 'author:Smith', 'title:quantum')"
+                        "description": "Search query"
                     },
                     "limit": {
                         "type": "integer",
-                        "description": "Maximum number of results to return (1-100, default: 10)",
+                        "description": "Max results (1-100)",
                         "default": 10
                     }
                 },
@@ -143,19 +144,21 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="get_metadata",
-            description="Get detailed metadata for an article including authors, journal, publication date, abstract, etc.",
+            description="Get detailed article metadata",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "doi": {
                         "type": "string",
-                        "description": "The DOI of the article"
+                        "description": "The DOI"
                     }
                 },
                 "required": ["doi"]
             }
         )
     ]
+    logger.info(f"Returning {len(tools)} tools")
+    return tools
 
 @server.call_tool()
 async def call_tool(name: str, arguments: dict) -> list[ToolResult]:
