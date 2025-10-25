@@ -7,6 +7,7 @@ Queries the DOI REST API to retrieve and verify article metadata.
 import asyncio
 import json
 import logging
+import sys
 from typing import Any
 
 import httpx
@@ -14,11 +15,15 @@ from mcp.server import Server
 from mcp.types import Tool, TextContent, ToolResult
 
 # Initialize logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    stream=sys.stderr
+)
 logger = logging.getLogger(__name__)
 
 # Initialize MCP server
-server = Server("doi-resolver")
+server = Server("doi-mcp")
 
 # DOI API endpoints
 DOI_API_BASE = "https://api.crossref.org/v1"
@@ -26,7 +31,7 @@ DOI_CONTENT_NEGOTIATION = "https://doi.org"
 
 # HTTP client with timeout and headers
 HEADERS = {
-    "User-Agent": "DOI-Resolver-MCP/1.0 (mailto:user@example.com)",
+    "User-Agent": "DOI-MCP/1.0 (mailto:thomas.f.scharff@gmail.com)",
     "Accept": "application/json"
 }
 
@@ -213,9 +218,16 @@ async def call_tool(name: str, arguments: dict) -> list[ToolResult]:
 
 async def main():
     """Run the MCP server."""
+    logger.info("Starting DOI Resolver MCP server")
     async with server:
-        logger.info("DOI Resolver MCP server started")
+        logger.info("DOI Resolver MCP server is running")
         await server.wait_for_shutdown()
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logger.info("Server shut down")
+    except Exception as e:
+        logger.error(f"Fatal error: {e}", exc_info=True)
+        sys.exit(1)
