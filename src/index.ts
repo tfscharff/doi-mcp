@@ -6,7 +6,7 @@ export const configSchema = z.object({
   autoVerify: z.boolean().default(true).describe("Automatically verify citations in responses"),
 });
 
-export default function createServer({ config }) {
+export default function createServer({ config }: { config?: any }) {
   const server = new McpServer({
     name: "Multi-Source Citation Verifier",
     version: "2.0.0",
