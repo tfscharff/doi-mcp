@@ -154,7 +154,7 @@ export default function createServer({ config }: { config?: Config }) {
     }
   }
 
-  function calculateMatchScore(result: NormalizedPaper, filters: { title?: string; authors?: string[]; year?: number }): number {
+  function calculateMatchScore(result: NormalizedPaper, filters: { title?: string; authors?: string[]; year?: number; journal?: string }): number {
     let score = 0;
     
     if (filters.title && result.title) {
