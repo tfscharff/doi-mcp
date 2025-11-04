@@ -1,20 +1,36 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
-// Configuration schema
 export const configSchema = z.object({
   autoVerify: z.boolean().default(true).describe("Automatically verify citations in responses"),
 });
 
-export default function createServer({ config }: { config?: any }) {
+type Config = z.infer<typeof configSchema>;
+
+interface SearchResults {
+  crossref: any[] | null;
+  openalex: any[] | null;
+  pubmed: any[] | null;
+  errors: string[];
+}
+
+interface NormalizedPaper {
+  source: string;
+  title?: string;
+  authors?: string[];
+  year?: number;
+  doi?: string;
+  journal?: string;
+}
+
+export default function createServer({ config }: { config?: Config }) {
   const server = new McpServer({
     name: "Multi-Source Citation Verifier",
     version: "2.0.0",
   });
 
-  // Helper function to search multiple sources
-  async function searchMultipleSources(query, filters = {}) {
-    const results = {
+  async function searchMultipleSources(query: string, filters: { year?: number } = {}): Promise<SearchResults> {
+    const results: SearchResults = {
       crossref: null,
       openalex: null,
       pubmed: null,
@@ -33,7 +49,7 @@ export default function createServer({ config }: { config?: any }) {
         const data = await crossrefResponse.json();
         results.crossref = data.message?.items || [];
       }
-    } catch (error) {
+    } catch (error: any) {
       results.errors.push(`CrossRef error: ${error.message}`);
     }
 
@@ -51,7 +67,7 @@ export default function createServer({ config }: { config?: any }) {
         const data = await openalexResponse.json();
         results.openalex = data.results || [];
       }
-    } catch (error) {
+    } catch (error: any) {
       results.errors.push(`OpenAlex error: ${error.message}`);
     }
 
@@ -70,42 +86,41 @@ export default function createServer({ config }: { config?: any }) {
           
           if (pubmedFetchResponse.ok) {
             const fetchData = await pubmedFetchResponse.json();
-            results.pubmed = pmids.map(id => fetchData.result?.[id]).filter(Boolean);
+            results.pubmed = pmids.map((id: string) => fetchData.result?.[id]).filter(Boolean);
           }
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       results.errors.push(`PubMed error: ${error.message}`);
     }
 
     return results;
   }
 
-  // Helper function to get DOI from PubMed result
-  async function getDOIFromPubMed(pmid) {
+  async function getDOIFromPubMed(pmid: string): Promise<string | null> {
     try {
       const url = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&id=${pmid}&retmode=xml`;
       const response = await fetch(url);
       if (response.ok) {
         const xmlText = await response.text();
-        // Simple regex to extract DOI from XML
         const doiMatch = xmlText.match(/<ArticleId IdType="doi">([^<]+)<\/ArticleId>/);
         return doiMatch ? doiMatch[1] : null;
       }
-    } catch (error) {
+    } catch (error: any) {
       return null;
     }
     return null;
   }
 
-  // Helper function to normalize results from different sources
-  async function normalizeResult(result, source) {
+  async function normalizeResult(result: any, source: string): Promise<NormalizedPaper | null> {
+    if (!result) return null;
+    
     switch (source) {
       case 'crossref':
         return {
           source: 'CrossRef',
           title: result.title?.[0],
-          authors: result.author?.map(a => `${a.given || ''} ${a.family || ''}`.trim()),
+          authors: result.author?.map((a: any) => `${a.given || ''} ${a.family || ''}`.trim()),
           year: result.published?.['date-parts']?.[0]?.[0],
           doi: result.DOI,
           journal: result['container-title']?.[0],
@@ -115,23 +130,22 @@ export default function createServer({ config }: { config?: any }) {
         return {
           source: 'OpenAlex',
           title: result.title,
-          authors: result.authorships?.map(a => a.author?.display_name).filter(Boolean),
+          authors: result.authorships?.map((a: any) => a.author?.display_name).filter(Boolean),
           year: result.publication_year,
           doi: result.doi?.replace('https://doi.org/', ''),
           journal: result.primary_location?.source?.display_name,
         };
       
       case 'pubmed':
-        // Try to fetch DOI for PubMed results
         const pmid = result.uid;
         const doi = await getDOIFromPubMed(pmid);
         
         return {
           source: 'PubMed',
           title: result.title,
-          authors: result.authors?.map(a => a.name),
-          year: result.pubdate ? parseInt(result.pubdate.split(' ')[0]) : null,
-          doi: doi,
+          authors: result.authors?.map((a: any) => a.name),
+          year: result.pubdate ? parseInt(result.pubdate.split(' ')[0]) : undefined,
+          doi: doi || undefined,
           journal: result.source,
         };
       
@@ -140,8 +154,7 @@ export default function createServer({ config }: { config?: any }) {
     }
   }
 
-  // Helper function to calculate match score
-  function calculateMatchScore(result, filters) {
+  function calculateMatchScore(result: NormalizedPaper, filters: { title?: string; authors?: string[]; year?: number }): number {
     let score = 0;
     
     if (filters.title && result.title) {
@@ -155,8 +168,8 @@ export default function createServer({ config }: { config?: any }) {
     }
     
     if (filters.authors && result.authors) {
-      const matchedAuthors = filters.authors.filter(filterAuthor => 
-        result.authors.some((resultAuthor: string) => 
+      const matchedAuthors = filters.authors.filter((filterAuthor: string) => 
+        result.authors?.some((resultAuthor: string) => 
           resultAuthor.toLowerCase().includes(filterAuthor.toLowerCase().split(' ').pop() || '')
         )
       );
@@ -166,7 +179,6 @@ export default function createServer({ config }: { config?: any }) {
     return score;
   }
 
-  // Primary verification tool
   server.registerTool(
     "verifyCitation",
     {
@@ -182,7 +194,6 @@ export default function createServer({ config }: { config?: any }) {
     },
     async ({ title, authors, year, doi, journal }) => {
       try {
-        // If DOI provided, try to resolve it directly first
         if (doi) {
           const cleanDoi = doi.replace(/^(https?:\/\/)?(dx\.)?doi\.org\//, "");
           
@@ -210,13 +221,12 @@ export default function createServer({ config }: { config?: any }) {
                 }],
               };
             }
-          } catch (error) {
-            // DOI resolution failed, continue with search
+          } catch (error: any) {
+            // Continue with search
           }
         }
 
-        // Build search query
-        const queryParts = [];
+        const queryParts: string[] = [];
         if (title) queryParts.push(title);
         if (authors && authors.length > 0) queryParts.push(authors.join(" "));
         if (journal) queryParts.push(journal);
@@ -236,22 +246,24 @@ export default function createServer({ config }: { config?: any }) {
         const query = queryParts.join(" ");
         const searchResults = await searchMultipleSources(query, { year });
 
-        // Collect all results
-        const allResults = [];
+        const allResults: NormalizedPaper[] = [];
         
         if (searchResults.crossref) {
           for (const r of searchResults.crossref) {
-            allResults.push(await normalizeResult(r, 'crossref'));
+            const normalized = await normalizeResult(r, 'crossref');
+            if (normalized) allResults.push(normalized);
           }
         }
         if (searchResults.openalex) {
           for (const r of searchResults.openalex) {
-            allResults.push(await normalizeResult(r, 'openalex'));
+            const normalized = await normalizeResult(r, 'openalex');
+            if (normalized) allResults.push(normalized);
           }
         }
         if (searchResults.pubmed) {
           for (const r of searchResults.pubmed) {
-            allResults.push(await normalizeResult(r, 'pubmed'));
+            const normalized = await normalizeResult(r, 'pubmed');
+            if (normalized) allResults.push(normalized);
           }
         }
 
@@ -270,8 +282,7 @@ export default function createServer({ config }: { config?: any }) {
           };
         }
 
-        // Find best match across all sources
-        let bestMatch = null;
+        let bestMatch: NormalizedPaper | null = null;
         let bestScore = 0;
 
         for (const result of allResults) {
@@ -320,13 +331,13 @@ export default function createServer({ config }: { config?: any }) {
           }],
         };
 
-      } catch (error) {
+      } catch (error: any) {
         return {
           content: [{
             type: "text",
             text: JSON.stringify({
               verified: false,
-              error: error instanceof Error ? error.message : String(error)
+              error: error.message
             }, null, 2)
           }],
           isError: true,
@@ -335,7 +346,6 @@ export default function createServer({ config }: { config?: any }) {
     }
   );
 
-  // Search tool for finding papers
   server.registerTool(
     "findVerifiedPapers",
     {
@@ -351,9 +361,8 @@ export default function createServer({ config }: { config?: any }) {
     },
     async ({ query, limit = 5, yearFrom, yearTo, source = 'all' }) => {
       try {
-        const allPapers = [];
+        const allPapers: NormalizedPaper[] = [];
 
-        // CrossRef
         if (source === 'all' || source === 'crossref') {
           try {
             let crossrefUrl = `https://api.crossref.org/works?query=${encodeURIComponent(query)}&rows=${limit}`;
@@ -364,15 +373,15 @@ export default function createServer({ config }: { config?: any }) {
             if (response.ok) {
               const data = await response.json();
               for (const item of data.message?.items || []) {
-                allPapers.push(await normalizeResult(item, 'crossref'));
+                const paper = await normalizeResult(item, 'crossref');
+                if (paper) allPapers.push(paper);
               }
             }
-          } catch (error) {
-            // Continue with other sources
+          } catch (error: any) {
+            // Continue
           }
         }
 
-        // OpenAlex
         if (source === 'all' || source === 'openalex') {
           try {
             let openalexUrl = `https://api.openalex.org/works?search=${encodeURIComponent(query)}&per_page=${limit}`;
@@ -390,15 +399,15 @@ export default function createServer({ config }: { config?: any }) {
             if (response.ok) {
               const data = await response.json();
               for (const item of data.results || []) {
-                allPapers.push(await normalizeResult(item, 'openalex'));
+                const paper = await normalizeResult(item, 'openalex');
+                if (paper) allPapers.push(paper);
               }
             }
-          } catch (error) {
-            // Continue with other sources
+          } catch (error: any) {
+            // Continue
           }
         }
 
-        // PubMed
         if (source === 'all' || source === 'pubmed') {
           try {
             let pubmedQuery = query;
@@ -428,8 +437,8 @@ export default function createServer({ config }: { config?: any }) {
                 }
               }
             }
-          } catch (error) {
-            // Continue with other sources
+          } catch (error: any) {
+            // Continue
           }
         }
 
@@ -442,9 +451,8 @@ export default function createServer({ config }: { config?: any }) {
           };
         }
 
-        // Deduplicate by DOI and title
-        const uniquePapers = [];
-        const seen = new Set();
+        const uniquePapers: NormalizedPaper[] = [];
+        const seen = new Set<string>();
 
         for (const paper of allPapers) {
           const key = paper.doi || paper.title?.toLowerCase();
@@ -456,7 +464,7 @@ export default function createServer({ config }: { config?: any }) {
 
         const citations = uniquePapers.slice(0, limit).map((paper, idx) => {
           const authorList = paper.authors?.slice(0, 3)?.join(", ") || "Unknown authors";
-          const etAl = paper.authors?.length > 3 ? " et al." : "";
+          const etAl = (paper.authors?.length || 0) > 3 ? " et al." : "";
 
           return {
             index: idx + 1,
@@ -483,11 +491,11 @@ export default function createServer({ config }: { config?: any }) {
           }],
         };
 
-      } catch (error) {
+      } catch (error: any) {
         return {
           content: [{
             type: "text",
-            text: `Error: ${error instanceof Error ? error.message : String(error)}`
+            text: `Error: ${error.message}`
           }],
           isError: true,
         };
@@ -495,7 +503,6 @@ export default function createServer({ config }: { config?: any }) {
     }
   );
 
-  // Prompt resource to guide Claude to verify citations
   server.registerPrompt(
     "citation-verification-rules",
     {
