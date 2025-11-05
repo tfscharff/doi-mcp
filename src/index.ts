@@ -2,7 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 export const configSchema = z.object({
-  autoVerify: z.boolean().default(true).describe("Automatically verify citations in responses"),
+  doiApiKey: z.string().optional().describe("Optional DOI.org API key for enhanced rate limits"),
 });
 
 type Config = z.infer<typeof configSchema>;
@@ -203,8 +203,15 @@ export default function createServer({ config }: { config?: Config }) {
           const cleanDoi = doi.replace(/^(https?:\/\/)?(dx\.)?doi\.org\//, "");
           
           try {
+            const headers: Record<string, string> = {
+              Accept: "application/vnd.citationstyles.csl+json"
+            };
+            if (config?.doiApiKey) {
+              headers['Authorization'] = `Bearer ${config.doiApiKey}`;
+            }
+
             const doiResponse = await fetch(`https://doi.org/api/handles/${cleanDoi}`, {
-              headers: { Accept: "application/vnd.citationstyles.csl+json" },
+              headers,
             });
 
             if (doiResponse.ok) {

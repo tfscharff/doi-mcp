@@ -1,1 +1,9 @@
 runtime: "typescript"
+config:
+  type: object
+  properties:
+    doiApiKey:
+      type: string
+      description: "Optional DOI.org API key for enhanced rate limits when verifying citations. If not provided, the server uses public API endpoints with standard rate limits."
+      title: "DOI.org API Key"
+  additionalProperties: false
