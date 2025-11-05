@@ -179,6 +179,7 @@ export default function createServer({ config }: { config?: Config }) {
     return score;
   }
 
+  // Register Tools with Annotations
   server.registerTool(
     "verifyCitation",
     {
@@ -191,6 +192,11 @@ export default function createServer({ config }: { config?: Config }) {
         doi: z.string().optional().describe("DOI if known"),
         journal: z.string().optional().describe("Journal name"),
       },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+      }
     },
     async ({ title, authors, year, doi, journal }) => {
       try {
@@ -358,6 +364,11 @@ export default function createServer({ config }: { config?: Config }) {
         yearTo: z.number().optional().describe("Maximum publication year"),
         source: z.enum(['all', 'crossref', 'openalex', 'pubmed']).default('all').describe("Which source to search"),
       },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+      }
     },
     async ({ query, limit = 5, yearFrom, yearTo, source = 'all' }) => {
       try {
@@ -501,6 +512,100 @@ export default function createServer({ config }: { config?: Config }) {
         };
       }
     }
+  );
+
+  // Register Resources
+  server.registerResource(
+    "citation://databases",
+    {
+      name: "Supported Citation Databases",
+      description: "Information about the academic databases used for citation verification",
+      mimeType: "application/json",
+    },
+    async () => ({
+      contents: [{
+        uri: "citation://databases",
+        mimeType: "application/json",
+        text: JSON.stringify({
+          databases: [
+            {
+              name: "CrossRef",
+              coverage: "150+ million scholarly publications",
+              url: "https://api.crossref.org",
+              types: "All academic disciplines"
+            },
+            {
+              name: "OpenAlex",
+              coverage: "250+ million scholarly works",
+              url: "https://api.openalex.org",
+              types: "All academic disciplines"
+            },
+            {
+              name: "PubMed",
+              coverage: "35+ million biomedical publications",
+              url: "https://pubmed.ncbi.nlm.nih.gov",
+              types: "Biomedical and life sciences"
+            }
+          ],
+          note: "All databases are queried in parallel for maximum coverage and reliability"
+        }, null, 2)
+      }]
+    })
+  );
+
+  server.registerResource(
+    "citation://guidelines",
+    {
+      name: "Citation Verification Guidelines",
+      description: "Best practices for using the citation verification system",
+      mimeType: "text/markdown",
+    },
+    async () => ({
+      contents: [{
+        uri: "citation://guidelines",
+        mimeType: "text/markdown",
+        text: `# Citation Verification Guidelines
+
+## When to Use verifyCitation
+
+**ALWAYS** verify before citing:
+- Specific papers you remember from training data
+- Papers mentioned by users that you want to reference
+- Any citation with specific author names, titles, or years
+
+## When to Use findVerifiedPapers
+
+Use when:
+- Asked about "recent research on X"
+- Needing to cite sources for a general topic
+- Building a bibliography or literature review
+- User asks "what papers exist on X"
+
+## Best Practices
+
+1. **Never cite from memory** - Always verify first
+2. **Include DOI URLs** - Use the \`doiUrl\` field in responses
+3. **Check verification status** - Only cite if \`verified: true\`
+4. **Use appropriate database** - Choose PubMed for biomedical topics
+5. **Provide alternatives** - If verification fails, search for real papers instead
+
+## Example Workflow
+
+\`\`\`
+User: "Tell me about CRISPR research"
+→ Use findVerifiedPapers({query: "CRISPR gene editing", limit: 5})
+→ Get verified papers with DOIs
+→ Cite: "According to Doudna et al. (2012) (https://doi.org/10.1126/science.1225829)..."
+\`\`\`
+
+## Warning Signs
+
+❌ Don't cite: "I believe Smith et al. published..."
+❌ Don't cite: "There was a famous paper on X..."
+✓ Do verify: Use tools to find real, verifiable citations
+`
+      }]
+    })
   );
 
   server.registerPrompt(
