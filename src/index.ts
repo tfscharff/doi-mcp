@@ -1,12 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
-export const configSchema = z.object({
-  doiApiKey: z.string().optional().describe("Optional DOI.org API key for enhanced rate limits"),
-});
-
-type Config = z.infer<typeof configSchema>;
-
 interface SearchResults {
   crossref: any[] | null;
   openalex: any[] | null;
@@ -23,7 +17,7 @@ interface NormalizedPaper {
   journal?: string;
 }
 
-export default function createServer({ config }: { config?: Config }) {
+export default function createServer() {
   const server = new McpServer({
     name: "Multi-Source Citation Verifier",
     version: "2.0.0",
@@ -203,15 +197,8 @@ export default function createServer({ config }: { config?: Config }) {
           const cleanDoi = doi.replace(/^(https?:\/\/)?(dx\.)?doi\.org\//, "");
           
           try {
-            const headers: Record<string, string> = {
-              Accept: "application/vnd.citationstyles.csl+json"
-            };
-            if (config?.doiApiKey) {
-              headers['Authorization'] = `Bearer ${config.doiApiKey}`;
-            }
-
             const doiResponse = await fetch(`https://doi.org/api/handles/${cleanDoi}`, {
-              headers,
+              headers: { Accept: "application/vnd.citationstyles.csl+json" },
             });
 
             if (doiResponse.ok) {

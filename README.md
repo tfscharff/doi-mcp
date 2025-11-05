@@ -87,11 +87,6 @@ findVerifiedPapers({ query: "cancer immunotherapy", source: "pubmed", limit: 10 
 findVerifiedPapers({ query: "machine learning", yearFrom: 2020, yearTo: 2024 })
 ```
 
-## Configuration
-
-Optional configuration:
-- `doiApiKey` (string): DOI.org API key for enhanced rate limits
-
 ## Installation
 
 ### Installing via Smithery

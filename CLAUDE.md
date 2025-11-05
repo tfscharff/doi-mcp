@@ -59,12 +59,6 @@ npm run dev
 npx @smithery/cli dev
 ```
 
-## Configuration
-
-The server accepts optional configuration via `smithery.yaml`:
-- `doiApiKey` (string, optional): DOI.org API key for enhanced rate limits
-- When provided, the API key is added as an Authorization header in DOI.org requests (src/index.ts:206-215)
-
 ## API Integration Details
 
 ### CrossRef API
@@ -103,7 +97,7 @@ If a DOI is provided to `verifyCitation`, it's checked first via DOI.org API bef
 
 The server is deployed to Smithery automatically on git push. Quality score factors:
 - Tool annotations (implemented: readOnlyHint, destructiveHint, idempotentHint)
-- Configuration schema in `smithery.yaml`
+- Optional configuration (no required config improves score)
 - Icon files (icon.png, icon.svg in repository root)
 - Runtime specified as "typescript" in smithery.yaml
 
@@ -118,7 +112,7 @@ The server is deployed to Smithery automatically on git push. Quality score fact
 
 The default export is a factory function:
 ```typescript
-export default function createServer({ config }: { config?: Config })
+export default function createServer()
 ```
 
-This allows the MCP runtime to instantiate the server with optional configuration and returns the initialized `server.server` instance.
+This allows the MCP runtime to instantiate the server and returns the initialized `server.server` instance. The server requires no configuration to function.
