@@ -516,8 +516,8 @@ export default function createServer({ config }: { config?: Config }) {
 
   // Register Resources
   server.registerResource(
-    "citation://databases",
     {
+      uri: "citation://databases",
       name: "Supported Citation Databases",
       description: "Information about the academic databases used for citation verification",
       mimeType: "application/json",
@@ -554,8 +554,8 @@ export default function createServer({ config }: { config?: Config }) {
   );
 
   server.registerResource(
-    "citation://guidelines",
     {
+      uri: "citation://guidelines",
       name: "Citation Verification Guidelines",
       description: "Best practices for using the citation verification system",
       mimeType: "text/markdown",
