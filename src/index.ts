@@ -179,19 +179,18 @@ export default function createServer({ config }: { config?: Config }) {
     return score;
   }
 
-  // Register Tools with Annotations
+  // Register Tools with Annotations - FIXED: Now using 3 arguments
   server.registerTool(
-    "verifyCitation",
     {
-      title: "Verify Citation",
+      name: "verifyCitation",
       description: "CRITICAL: Use this to verify ANY academic citation before mentioning it. Checks multiple databases (CrossRef, OpenAlex, PubMed) if a paper exists. Returns null if not found.",
-      inputSchema: {
+      inputSchema: z.object({
         title: z.string().optional().describe("Paper title (partial matches accepted)"),
         authors: z.array(z.string()).optional().describe("Author names (last names sufficient)"),
         year: z.number().optional().describe("Publication year"),
         doi: z.string().optional().describe("DOI if known"),
         journal: z.string().optional().describe("Journal name"),
-      },
+      }),
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -353,17 +352,16 @@ export default function createServer({ config }: { config?: Config }) {
   );
 
   server.registerTool(
-    "findVerifiedPapers",
     {
-      title: "Find Verified Papers",
+      name: "findVerifiedPapers",
       description: "Search multiple academic databases (CrossRef, OpenAlex, PubMed) for papers and return only verified, real citations with DOIs.",
-      inputSchema: {
+      inputSchema: z.object({
         query: z.string().describe("Search query (topic, keywords, author names)"),
         limit: z.number().min(1).max(20).default(5).describe("Number of results per source"),
         yearFrom: z.number().optional().describe("Minimum publication year"),
         yearTo: z.number().optional().describe("Maximum publication year"),
         source: z.enum(['all', 'crossref', 'openalex', 'pubmed']).default('all').describe("Which source to search"),
-      },
+      }),
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
