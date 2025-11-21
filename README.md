@@ -2,31 +2,52 @@
 
 [![smithery badge](https://smithery.ai/badge/@tfscharff/doi-mcp)](https://smithery.ai/server/@tfscharff/doi-mcp)
 
-A Model Context Protocol (MCP) server that **prevents citation hallucination** by verifying academic citations against multiple authoritative databases. This server enables AI assistants to verify every citation against real publications in CrossRef, OpenAlex, and PubMed before citing them.
+A Model Context Protocol (MCP) server that **prevents citation hallucination** by verifying academic citations against **7 authoritative databases**. This server enables AI assistants to verify every citation against real publications before citing them.
 
 ## The Problem This Solves
 
 Large language models often "hallucinate" academic citations - citing papers that don't exist, misattributing real titles to wrong authors, or mixing up publication details. This MCP server eliminates that problem by:
 
-1. **Multi-source verification**: Checks citations across CrossRef (150+ million publications), OpenAlex (250+ million works), and PubMed (35+ million biomedical papers)
-2. **Real-time validation**: Searches multiple authoritative databases to confirm publications exist
-3. **Comprehensive coverage**: Combines general academic literature (CrossRef, OpenAlex) with specialized biomedical sources (PubMed)
+1. **7-database verification**: Checks citations across CrossRef, OpenAlex, PubMed, zbMATH, arXiv, Semantic Scholar, and DBLP
+2. **Parallel search**: Queries all databases simultaneously for fast results (~1 second)
+3. **Comprehensive coverage**: 600+ million publications across all disciplines including specialized math, CS, and biomedical sources
 4. **DOI-backed citations**: Every verified citation includes a valid, clickable DOI
 
 ## Features
 
-- **Verify Citations**: Check if a paper with specific details actually exists across multiple databases
-- **Find Verified Papers**: Search for real papers on a topic and get only verified citations from CrossRef, OpenAlex, and PubMed
-- **Multi-Database Coverage**: Cross-references results across academic databases for maximum reliability
-- **Source Selection**: Search all databases or target specific sources (CrossRef, OpenAlex, PubMed)
+- **7 Database Search**: CrossRef, OpenAlex, PubMed, zbMATH, arXiv, Semantic Scholar, DBLP
+- **Verify Citations**: Check if a paper with specific details actually exists across all databases
+- **Find Verified Papers**: Search for real papers on a topic and get only verified citations
+- **Parallel Processing**: All database queries run simultaneously for maximum speed
+- **Source Selection**: Search all databases or target specific sources
 - **Citation Formatting**: Returns properly formatted citations with DOIs
+- **Slash Command**: Type `/doi` to activate citation verification mode
+
+## Quick Start
+
+### Using the `/doi` Slash Command
+
+Type `/doi` in Claude Code to activate citation verification mode:
+
+```
+User: /doi
+User: What research exists on quantum computing?
+Claude: [Automatically uses findVerifiedPapers to search 7 databases]
+Claude: [Returns only verified papers with real DOIs]
+```
+
+This puts Claude into a mode where it will:
+- Use `verifyCitation` before citing any specific paper
+- Use `findVerifiedPapers` when searching for research
+- Never cite papers from memory
+- Always include DOI URLs
 
 ## How It Works
 
 When an AI assistant is asked about research or for citations:
 
 1. **Without this MCP**: The assistant might cite "According to Smith et al. (2023) in Nature..." referencing a paper that doesn't exist
-2. **With this MCP**: The assistant uses `verifyCitation` first, which searches across databases and returns:
+2. **With this MCP**: The assistant uses `verifyCitation` first, which searches across 7 databases in parallel and returns:
    - Verified match with full DOI → Can be cited
    - No match found → Cannot cite; must search for real papers instead
 
@@ -68,7 +89,7 @@ Search for real papers on a topic and return only verified citations with DOIs f
 
 **Input:**
 - `query` (string): Search query (topic, keywords, author names)
-- `source` (string, optional): Which database to search - "all" (default), "crossref", "openalex", or "pubmed"
+- `source` (string, optional): Which database to search - "all" (default), "crossref", "openalex", "pubmed", "zbmath", "arxiv", "semanticscholar", or "dblp"
 - `limit` (number, optional): Number of results per source (1-20, default: 5)
 - `yearFrom` (number, optional): Minimum publication year
 - `yearTo` (number, optional): Maximum publication year
@@ -77,14 +98,20 @@ Search for real papers on a topic and return only verified citations with DOIs f
 
 **Example:**
 ```javascript
-// Search all databases
+// Search all 7 databases
 findVerifiedPapers({ query: "CRISPR gene editing", limit: 5 })
 
 // Search only PubMed for biomedical papers
 findVerifiedPapers({ query: "cancer immunotherapy", source: "pubmed", limit: 10 })
 
-// Search with year filter
-findVerifiedPapers({ query: "machine learning", yearFrom: 2020, yearTo: 2024 })
+// Search zbMATH for mathematics papers
+findVerifiedPapers({ query: "algebraic topology", source: "zbmath" })
+
+// Search DBLP for computer science papers
+findVerifiedPapers({ query: "neural networks", source: "dblp", yearFrom: 2020 })
+
+// Search arXiv for preprints
+findVerifiedPapers({ query: "quantum computing", source: "arxiv", yearFrom: 2024 })
 ```
 
 ## Installation
@@ -141,17 +168,28 @@ Assistant: [Uses findVerifiedPapers tool]
 **Verification catches fake citations:**
 ```
 User: "Can you verify this citation: Smith et al. (2024), 'Quantum AI', Nature"
-Assistant: [Uses verifyCitation tool]
-           "⚠ I cannot verify this citation - no matching publication found in 
-            CrossRef, OpenAlex, or PubMed databases. This citation may be incorrect."
+Assistant: [Uses verifyCitation tool - searches all 7 databases in parallel]
+           "⚠ I cannot verify this citation - no matching publication found in
+            any of the 7 databases. This citation may be incorrect."
 ```
 
-## API Sources
+## Database Coverage
 
-- **CrossRef API**: 150+ million scholarly publications (https://api.crossref.org)
-- **OpenAlex API**: 250+ million scholarly works (https://api.openalex.org)
-- **PubMed API**: 35+ million biomedical and life sciences publications (https://api.ncbi.nlm.nih.gov/lit/ctxp)
-- **DOI Resolution**: DOI.org API (https://doi.org)
+All databases are queried in parallel for maximum speed (~1 second total):
+
+### General Databases
+- **CrossRef**: 150+ million scholarly publications across all disciplines
+- **OpenAlex**: 250+ million scholarly works across all disciplines
+- **Semantic Scholar**: 200+ million papers with AI-powered search
+
+### Specialized Databases
+- **PubMed**: 35+ million biomedical and life sciences publications
+- **zbMATH**: 4+ million mathematics publications
+- **arXiv**: 2+ million preprints (physics, math, CS, and more)
+- **DBLP**: Comprehensive computer science bibliography (journals and conferences)
+
+### Total Coverage
+**600+ million publications** across all academic disciplines with specialized depth in mathematics, computer science, and biomedical sciences.
 
 ## License
 
@@ -163,8 +201,15 @@ Contributions are welcome! Please feel free to submit issues or pull requests.
 
 ## Related
 
-- [CrossRef API Documentation](https://www.crossref.org/documentation/retrieve-metadata/rest-api/)
-- [OpenAlex API Documentation](https://docs.openalex.org/)
-- [PubMed API Documentation](https://www.ncbi.nlm.nih.gov/home/develop/api/)
+### API Documentation
+- [CrossRef API](https://www.crossref.org/documentation/retrieve-metadata/rest-api/)
+- [OpenAlex API](https://docs.openalex.org/)
+- [PubMed API](https://www.ncbi.nlm.nih.gov/home/develop/api/)
+- [zbMATH API](https://zbmath.org/api/)
+- [arXiv API](https://info.arxiv.org/help/api/user-manual.html)
+- [Semantic Scholar API](https://www.semanticscholar.org/product/api)
+- [DBLP API](https://dblp.org/faq/How+to+use+the+dblp+search+API.html)
+
+### Resources
 - [DOI Handbook](https://www.doi.org/the-identifier/resources/handbook)
 - [Model Context Protocol](https://modelcontextprotocol.io)
