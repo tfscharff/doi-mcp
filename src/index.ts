@@ -5,6 +5,8 @@ interface SearchResults {
   crossref: any[] | null;
   openalex: any[] | null;
   pubmed: any[] | null;
+  zbmath: any[] | null;
+  arxiv: any[] | null;
   errors: string[];
 }
 
@@ -28,6 +30,8 @@ export default function createServer() {
       crossref: null,
       openalex: null,
       pubmed: null,
+      zbmath: null,
+      arxiv: null,
       errors: []
     };
 
@@ -88,6 +92,69 @@ export default function createServer() {
       results.errors.push(`PubMed error: ${error.message}`);
     }
 
+    // zbMATH search
+    try {
+      let zbmathUrl = `https://api.zbmath.org/document/_structured_search?query=${encodeURIComponent(query)}&results_per_page=3`;
+      if (filters.year) {
+        zbmathUrl += `&year=${filters.year}`;
+      }
+
+      const zbmathResponse = await fetch(zbmathUrl);
+      if (zbmathResponse.ok) {
+        const data = await zbmathResponse.json();
+        results.zbmath = data.result || [];
+      }
+    } catch (error: any) {
+      results.errors.push(`zbMATH error: ${error.message}`);
+    }
+
+    // arXiv search
+    try {
+      let arxivUrl = `http://export.arxiv.org/api/query?search_query=all:${encodeURIComponent(query)}&start=0&max_results=3`;
+
+      const arxivResponse = await fetch(arxivUrl);
+      if (arxivResponse.ok) {
+        const xmlText = await arxivResponse.text();
+
+        // Parse Atom XML entries
+        const entries: any[] = [];
+        const entryRegex = /<entry>([\s\S]*?)<\/entry>/g;
+        let entryMatch;
+
+        while ((entryMatch = entryRegex.exec(xmlText)) !== null) {
+          const entryXml = entryMatch[1];
+
+          // Extract fields from entry
+          const titleMatch = entryXml.match(/<title>([\s\S]*?)<\/title>/);
+          const idMatch = entryXml.match(/<id>([\s\S]*?)<\/id>/);
+          const updatedMatch = entryXml.match(/<updated>([\s\S]*?)<\/updated>/);
+          const doiMatch = entryXml.match(/<arxiv:doi[^>]*>([\s\S]*?)<\/arxiv:doi>/);
+          const journalMatch = entryXml.match(/<arxiv:journal_ref[^>]*>([\s\S]*?)<\/arxiv:journal_ref>/);
+
+          // Extract authors
+          const authors: string[] = [];
+          const authorRegex = /<author>[\s\S]*?<name>([\s\S]*?)<\/name>[\s\S]*?<\/author>/g;
+          let authorMatch;
+          while ((authorMatch = authorRegex.exec(entryXml)) !== null) {
+            authors.push(authorMatch[1].trim());
+          }
+
+          entries.push({
+            title: titleMatch ? titleMatch[1].trim().replace(/\s+/g, ' ') : undefined,
+            id: idMatch ? idMatch[1].trim() : undefined,
+            updated: updatedMatch ? updatedMatch[1].trim() : undefined,
+            doi: doiMatch ? doiMatch[1].trim() : undefined,
+            journal_ref: journalMatch ? journalMatch[1].trim() : undefined,
+            authors: authors
+          });
+        }
+
+        results.arxiv = entries;
+      }
+    } catch (error: any) {
+      results.errors.push(`arXiv error: ${error.message}`);
+    }
+
     return results;
   }
 
@@ -133,7 +200,7 @@ export default function createServer() {
       case 'pubmed':
         const pmid = result.uid;
         const doi = await getDOIFromPubMed(pmid);
-        
+
         return {
           source: 'PubMed',
           title: result.title,
@@ -142,7 +209,43 @@ export default function createServer() {
           doi: doi || undefined,
           journal: result.source,
         };
-      
+
+      case 'zbmath':
+        return {
+          source: 'zbMATH',
+          title: result.title,
+          authors: result.authors?.map((a: any) => a.name || a).filter(Boolean),
+          year: result.year || result.publication_year,
+          doi: result.doi,
+          journal: result.source || result.journal,
+        };
+
+      case 'arxiv':
+        // Extract year from updated date (ISO 8601 format: 2023-01-15T10:30:00Z)
+        let arxivYear: number | undefined = undefined;
+        if (result.updated) {
+          const yearMatch = result.updated.match(/^(\d{4})/);
+          if (yearMatch) {
+            arxivYear = parseInt(yearMatch[1]);
+          }
+        }
+
+        // Extract arXiv ID from full URL
+        let arxivId: string | undefined = undefined;
+        if (result.id) {
+          const idMatch = result.id.match(/arxiv\.org\/abs\/(.+)$/);
+          arxivId = idMatch ? idMatch[1] : undefined;
+        }
+
+        return {
+          source: 'arXiv',
+          title: result.title,
+          authors: result.authors,
+          year: arxivYear,
+          doi: result.doi || undefined,
+          journal: result.journal_ref || (arxivId ? `arXiv:${arxivId}` : 'arXiv preprint'),
+        };
+
       default:
         return null;
     }
@@ -177,7 +280,7 @@ export default function createServer() {
   server.registerTool(
     "verifyCitation",
     {
-      description: "CRITICAL: Use this to verify ANY academic citation before mentioning it. Checks multiple databases (CrossRef, OpenAlex, PubMed) if a paper exists. Returns null if not found.",
+      description: "CRITICAL: Use this to verify ANY academic citation before mentioning it. Checks multiple databases (CrossRef, OpenAlex, PubMed, zbMATH, arXiv) if a paper exists. Returns null if not found.",
       inputSchema: {
         title: z.string().optional().describe("Paper title (partial matches accepted)"),
         authors: z.array(z.string()).optional().describe("Author names (last names sufficient)"),
@@ -246,7 +349,7 @@ export default function createServer() {
         const searchResults = await searchMultipleSources(query, { year });
 
         const allResults: NormalizedPaper[] = [];
-        
+
         if (searchResults.crossref) {
           for (const r of searchResults.crossref) {
             const normalized = await normalizeResult(r, 'crossref');
@@ -265,6 +368,18 @@ export default function createServer() {
             if (normalized) allResults.push(normalized);
           }
         }
+        if (searchResults.zbmath) {
+          for (const r of searchResults.zbmath) {
+            const normalized = await normalizeResult(r, 'zbmath');
+            if (normalized) allResults.push(normalized);
+          }
+        }
+        if (searchResults.arxiv) {
+          for (const r of searchResults.arxiv) {
+            const normalized = await normalizeResult(r, 'arxiv');
+            if (normalized) allResults.push(normalized);
+          }
+        }
 
         if (allResults.length === 0) {
           return {
@@ -273,7 +388,7 @@ export default function createServer() {
               text: JSON.stringify({
                 verified: false,
                 message: "⚠ No matching publications found in any database - this citation may be incorrect",
-                searchedSources: ['CrossRef', 'OpenAlex', 'PubMed'],
+                searchedSources: ['CrossRef', 'OpenAlex', 'PubMed', 'zbMATH', 'arXiv'],
                 searchedFor: { title, authors, year, journal },
                 errors: searchResults.errors.length > 0 ? searchResults.errors : undefined
               }, null, 2)
@@ -348,13 +463,13 @@ export default function createServer() {
   server.registerTool(
     "findVerifiedPapers",
     {
-      description: "Search multiple academic databases (CrossRef, OpenAlex, PubMed) for papers and return only verified, real citations with DOIs.",
+      description: "Search multiple academic databases (CrossRef, OpenAlex, PubMed, zbMATH, arXiv) for papers and return only verified, real citations with DOIs.",
       inputSchema: {
         query: z.string().describe("Search query (topic, keywords, author names)"),
         limit: z.number().min(1).max(20).default(5).describe("Number of results per source"),
         yearFrom: z.number().optional().describe("Minimum publication year"),
         yearTo: z.number().optional().describe("Maximum publication year"),
-        source: z.enum(['all', 'crossref', 'openalex', 'pubmed']).default('all').describe("Which source to search"),
+        source: z.enum(['all', 'crossref', 'openalex', 'pubmed', 'zbmath', 'arxiv']).default('all').describe("Which source to search"),
       },
       annotations: {
         readOnlyHint: true,
@@ -362,7 +477,7 @@ export default function createServer() {
         idempotentHint: true,
       }
     },
-    async ({ query, limit = 5, yearFrom, yearTo, source = 'all' }: { query: string; limit?: number; yearFrom?: number; yearTo?: number; source?: 'all' | 'crossref' | 'openalex' | 'pubmed' }) => {
+    async ({ query, limit = 5, yearFrom, yearTo, source = 'all' }: { query: string; limit?: number; yearFrom?: number; yearTo?: number; source?: 'all' | 'crossref' | 'openalex' | 'pubmed' | 'zbmath' | 'arxiv' }) => {
       try {
         const allPapers: NormalizedPaper[] = [];
 
@@ -438,6 +553,89 @@ export default function createServer() {
                     if (paper) allPapers.push(paper);
                   }
                 }
+              }
+            }
+          } catch (error: any) {
+            // Continue
+          }
+        }
+
+        if (source === 'all' || source === 'zbmath') {
+          try {
+            let zbmathUrl = `https://api.zbmath.org/document/_structured_search?query=${encodeURIComponent(query)}&results_per_page=${limit}`;
+            if (yearFrom) zbmathUrl += `&year=${yearFrom}`;
+            if (yearTo && !yearFrom) zbmathUrl += `&year=${yearTo}`;
+
+            const response = await fetch(zbmathUrl);
+            if (response.ok) {
+              const data = await response.json();
+              for (const item of data.result || []) {
+                const paper = await normalizeResult(item, 'zbmath');
+                if (paper) allPapers.push(paper);
+              }
+            }
+          } catch (error: any) {
+            // Continue
+          }
+        }
+
+        if (source === 'all' || source === 'arxiv') {
+          try {
+            let arxivUrl = `http://export.arxiv.org/api/query?search_query=all:${encodeURIComponent(query)}&start=0&max_results=${limit}`;
+
+            const response = await fetch(arxivUrl);
+            if (response.ok) {
+              const xmlText = await response.text();
+
+              // Parse Atom XML entries (same logic as in searchMultipleSources)
+              const entries: any[] = [];
+              const entryRegex = /<entry>([\s\S]*?)<\/entry>/g;
+              let entryMatch;
+
+              while ((entryMatch = entryRegex.exec(xmlText)) !== null) {
+                const entryXml = entryMatch[1];
+
+                const titleMatch = entryXml.match(/<title>([\s\S]*?)<\/title>/);
+                const idMatch = entryXml.match(/<id>([\s\S]*?)<\/id>/);
+                const updatedMatch = entryXml.match(/<updated>([\s\S]*?)<\/updated>/);
+                const doiMatch = entryXml.match(/<arxiv:doi[^>]*>([\s\S]*?)<\/arxiv:doi>/);
+                const journalMatch = entryXml.match(/<arxiv:journal_ref[^>]*>([\s\S]*?)<\/arxiv:journal_ref>/);
+
+                const authors: string[] = [];
+                const authorRegex = /<author>[\s\S]*?<name>([\s\S]*?)<\/name>[\s\S]*?<\/author>/g;
+                let authorMatch;
+                while ((authorMatch = authorRegex.exec(entryXml)) !== null) {
+                  authors.push(authorMatch[1].trim());
+                }
+
+                const entry = {
+                  title: titleMatch ? titleMatch[1].trim().replace(/\s+/g, ' ') : undefined,
+                  id: idMatch ? idMatch[1].trim() : undefined,
+                  updated: updatedMatch ? updatedMatch[1].trim() : undefined,
+                  doi: doiMatch ? doiMatch[1].trim() : undefined,
+                  journal_ref: journalMatch ? journalMatch[1].trim() : undefined,
+                  authors: authors
+                };
+
+                // Filter by year if specified
+                let shouldInclude = true;
+                if (yearFrom || yearTo) {
+                  const yearMatch = entry.updated?.match(/^(\d{4})/);
+                  if (yearMatch) {
+                    const entryYear = parseInt(yearMatch[1]);
+                    if (yearFrom && entryYear < yearFrom) shouldInclude = false;
+                    if (yearTo && entryYear > yearTo) shouldInclude = false;
+                  }
+                }
+
+                if (shouldInclude) {
+                  entries.push(entry);
+                }
+              }
+
+              for (const item of entries) {
+                const paper = await normalizeResult(item, 'arxiv');
+                if (paper) allPapers.push(paper);
               }
             }
           } catch (error: any) {
@@ -537,6 +735,18 @@ export default function createServer() {
               coverage: "35+ million biomedical publications",
               url: "https://pubmed.ncbi.nlm.nih.gov",
               types: "Biomedical and life sciences"
+            },
+            {
+              name: "zbMATH",
+              coverage: "4+ million mathematics publications",
+              url: "https://zbmath.org",
+              types: "Mathematics and related fields"
+            },
+            {
+              name: "arXiv",
+              coverage: "2+ million preprints",
+              url: "https://arxiv.org",
+              types: "Physics, mathematics, computer science, and more"
             }
           ],
           note: "All databases are queried in parallel for maximum coverage and reliability"
@@ -578,7 +788,7 @@ Use when:
 1. **Never cite from memory** - Always verify first
 2. **Include DOI URLs** - Use the \`doiUrl\` field in responses
 3. **Check verification status** - Only cite if \`verified: true\`
-4. **Use appropriate database** - Choose PubMed for biomedical topics
+4. **Use appropriate database** - Choose PubMed for biomedical topics, zbMATH for mathematics, arXiv for preprints
 5. **Provide alternatives** - If verification fails, search for real papers instead
 
 ## Example Workflow
