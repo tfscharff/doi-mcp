@@ -6,7 +6,7 @@ A Model Context Protocol (MCP) server that **prevents citation hallucination** b
 
 ## The Problem This Solves
 
-Large language models often "hallucinate" academic citations - citing papers that don't exist, misattributing real titles to wrong authors, or mixing up publication details. This MCP server eliminates that problem by:
+Large language models sometimes "hallucinate" academic citations - citing papers that don't exist, misattributing real titles to wrong authors, or mixing up publication details. This MCP server eliminates that problem by:
 
 1. **7-database verification**: Checks citations across CrossRef, OpenAlex, PubMed, zbMATH, arXiv, Semantic Scholar, and DBLP
 2. **Parallel search**: Queries all databases simultaneously for fast results (~1 second)
