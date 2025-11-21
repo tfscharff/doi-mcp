@@ -7,6 +7,8 @@ interface SearchResults {
   pubmed: any[] | null;
   zbmath: any[] | null;
   arxiv: any[] | null;
+  semanticscholar: any[] | null;
+  dblp: any[] | null;
   errors: string[];
 }
 
@@ -101,6 +103,8 @@ export default function createServer() {
       pubmed: null,
       zbmath: null,
       arxiv: null,
+      semanticscholar: null,
+      dblp: null,
       errors: []
     };
 
@@ -181,6 +185,32 @@ export default function createServer() {
           return { source: 'arxiv', data: parseArxivXml(xmlText) };
         }
         return { source: 'arxiv', data: [] };
+      })(),
+
+      // Semantic Scholar search
+      (async () => {
+        let semanticUrl = `https://api.semanticscholar.org/graph/v1/paper/search?query=${encodeURIComponent(query)}&limit=3&fields=paperId,title,authors,year,externalIds,venue`;
+        if (filters.year) {
+          semanticUrl += `&year=${filters.year}`;
+        }
+
+        const response = await fetch(semanticUrl);
+        if (response.ok) {
+          const data = await response.json();
+          return { source: 'semanticscholar', data: data.data || [] };
+        }
+        return { source: 'semanticscholar', data: [] };
+      })(),
+
+      // DBLP search
+      (async () => {
+        const dblpUrl = `https://dblp.org/search/publ/api?q=${encodeURIComponent(query)}&format=json&h=3`;
+        const response = await fetch(dblpUrl);
+        if (response.ok) {
+          const data = await response.json();
+          return { source: 'dblp', data: data.result?.hits?.hit || [] };
+        }
+        return { source: 'dblp', data: [] };
       })()
     ]);
 
@@ -190,7 +220,7 @@ export default function createServer() {
         const { source, data } = result.value;
         results[source as keyof Omit<SearchResults, 'errors'>] = data;
       } else {
-        const sources = ['CrossRef', 'OpenAlex', 'PubMed', 'zbMATH', 'arXiv'];
+        const sources = ['CrossRef', 'OpenAlex', 'PubMed', 'zbMATH', 'arXiv', 'Semantic Scholar', 'DBLP'];
         results.errors.push(`${sources[index]} error: ${result.reason?.message || 'Unknown error'}`);
       }
     });
@@ -271,6 +301,30 @@ export default function createServer() {
           journal: result.journal_ref || (arxivId ? `arXiv:${arxivId}` : 'arXiv preprint'),
         };
 
+      case 'semanticscholar':
+        return {
+          source: 'Semantic Scholar',
+          title: result.title,
+          authors: result.authors?.map((a: any) => a.name).filter(Boolean),
+          year: result.year,
+          doi: result.externalIds?.DOI,
+          journal: result.venue,
+        };
+
+      case 'dblp':
+        return {
+          source: 'DBLP',
+          title: result.info?.title,
+          authors: result.info?.authors?.author ?
+            (Array.isArray(result.info.authors.author) ?
+              result.info.authors.author.map((a: any) => a.text || a) :
+              [result.info.authors.author.text || result.info.authors.author]) :
+            [],
+          year: result.info?.year ? parseInt(result.info.year) : undefined,
+          doi: result.info?.doi,
+          journal: result.info?.venue,
+        };
+
       default:
         return null;
     }
@@ -305,7 +359,7 @@ export default function createServer() {
   server.registerTool(
     "verifyCitation",
     {
-      description: "CRITICAL: Use this to verify ANY academic citation before mentioning it. Checks multiple databases (CrossRef, OpenAlex, PubMed, zbMATH, arXiv) if a paper exists. Returns null if not found.",
+      description: "CRITICAL: Use this to verify ANY academic citation before mentioning it. Checks multiple databases (CrossRef, OpenAlex, PubMed, zbMATH, arXiv, Semantic Scholar, DBLP) if a paper exists. Returns null if not found.",
       inputSchema: {
         title: z.string().optional().describe("Paper title (partial matches accepted)"),
         authors: z.array(z.string()).optional().describe("Author names (last names sufficient)"),
@@ -395,6 +449,12 @@ export default function createServer() {
         if (searchResults.arxiv) {
           normalizationPromises.push(...searchResults.arxiv.map((r: any) => normalizeResult(r, 'arxiv')));
         }
+        if (searchResults.semanticscholar) {
+          normalizationPromises.push(...searchResults.semanticscholar.map((r: any) => normalizeResult(r, 'semanticscholar')));
+        }
+        if (searchResults.dblp) {
+          normalizationPromises.push(...searchResults.dblp.map((r: any) => normalizeResult(r, 'dblp')));
+        }
 
         const allResults = (await Promise.all(normalizationPromises)).filter((r): r is NormalizedPaper => r !== null);
 
@@ -405,7 +465,7 @@ export default function createServer() {
               text: JSON.stringify({
                 verified: false,
                 message: "⚠ No matching publications found in any database - this citation may be incorrect",
-                searchedSources: ['CrossRef', 'OpenAlex', 'PubMed', 'zbMATH', 'arXiv'],
+                searchedSources: ['CrossRef', 'OpenAlex', 'PubMed', 'zbMATH', 'arXiv', 'Semantic Scholar', 'DBLP'],
                 searchedFor: { title, authors, year, journal },
                 errors: searchResults.errors.length > 0 ? searchResults.errors : undefined
               }, null, 2)
@@ -480,13 +540,13 @@ export default function createServer() {
   server.registerTool(
     "findVerifiedPapers",
     {
-      description: "Search multiple academic databases (CrossRef, OpenAlex, PubMed, zbMATH, arXiv) for papers and return only verified, real citations with DOIs.",
+      description: "Search multiple academic databases (CrossRef, OpenAlex, PubMed, zbMATH, arXiv, Semantic Scholar, DBLP) for papers and return only verified, real citations with DOIs.",
       inputSchema: {
         query: z.string().describe("Search query (topic, keywords, author names)"),
         limit: z.number().min(1).max(20).default(5).describe("Number of results per source"),
         yearFrom: z.number().optional().describe("Minimum publication year"),
         yearTo: z.number().optional().describe("Maximum publication year"),
-        source: z.enum(['all', 'crossref', 'openalex', 'pubmed', 'zbmath', 'arxiv']).default('all').describe("Which source to search"),
+        source: z.enum(['all', 'crossref', 'openalex', 'pubmed', 'zbmath', 'arxiv', 'semanticscholar', 'dblp']).default('all').describe("Which source to search"),
       },
       annotations: {
         readOnlyHint: true,
@@ -494,7 +554,7 @@ export default function createServer() {
         idempotentHint: true,
       }
     },
-    async ({ query, limit = 5, yearFrom, yearTo, source = 'all' }: { query: string; limit?: number; yearFrom?: number; yearTo?: number; source?: 'all' | 'crossref' | 'openalex' | 'pubmed' | 'zbmath' | 'arxiv' }) => {
+    async ({ query, limit = 5, yearFrom, yearTo, source = 'all' }: { query: string; limit?: number; yearFrom?: number; yearTo?: number; source?: 'all' | 'crossref' | 'openalex' | 'pubmed' | 'zbmath' | 'arxiv' | 'semanticscholar' | 'dblp' }) => {
       try {
         // Execute all API calls in parallel for maximum speed
         const apiPromises: Promise<{ source: string; items: any[] }>[] = [];
@@ -604,6 +664,48 @@ export default function createServer() {
               return { source: 'arxiv', items: filtered };
             }
             return { source: 'arxiv', items: [] };
+          })());
+        }
+
+        if (source === 'all' || source === 'semanticscholar') {
+          apiPromises.push((async () => {
+            let semanticUrl = `https://api.semanticscholar.org/graph/v1/paper/search?query=${encodeURIComponent(query)}&limit=${limit}&fields=paperId,title,authors,year,externalIds,venue`;
+            if (yearFrom) {
+              semanticUrl += `&year=${yearFrom}-`;
+            }
+            if (yearTo && !yearFrom) {
+              semanticUrl += `&year=-${yearTo}`;
+            }
+
+            const response = await fetch(semanticUrl);
+            if (response.ok) {
+              const data = await response.json();
+              return { source: 'semanticscholar', items: data.data || [] };
+            }
+            return { source: 'semanticscholar', items: [] };
+          })());
+        }
+
+        if (source === 'all' || source === 'dblp') {
+          apiPromises.push((async () => {
+            const dblpUrl = `https://dblp.org/search/publ/api?q=${encodeURIComponent(query)}&format=json&h=${limit}`;
+            const response = await fetch(dblpUrl);
+            if (response.ok) {
+              const data = await response.json();
+              // Filter by year if specified
+              let hits = data.result?.hits?.hit || [];
+              if (yearFrom || yearTo) {
+                hits = hits.filter((hit: any) => {
+                  const year = hit.info?.year ? parseInt(hit.info.year) : null;
+                  if (!year) return true;
+                  if (yearFrom && year < yearFrom) return false;
+                  if (yearTo && year > yearTo) return false;
+                  return true;
+                });
+              }
+              return { source: 'dblp', items: hits };
+            }
+            return { source: 'dblp', items: [] };
           })());
         }
 
@@ -739,6 +841,18 @@ export default function createServer() {
               coverage: "2+ million preprints",
               url: "https://arxiv.org",
               types: "Physics, mathematics, computer science, and more"
+            },
+            {
+              name: "Semantic Scholar",
+              coverage: "200+ million papers",
+              url: "https://www.semanticscholar.org",
+              types: "All academic disciplines with AI-powered search"
+            },
+            {
+              name: "DBLP",
+              coverage: "Comprehensive computer science bibliography",
+              url: "https://dblp.org",
+              types: "Computer science publications (journals and conferences)"
             }
           ],
           note: "All databases are queried in parallel for maximum coverage and reliability"
