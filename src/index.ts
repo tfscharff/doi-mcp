@@ -9,6 +9,7 @@ interface SearchResults {
   semanticscholar: any[] | null;
   dblp: any[] | null;
   eric: any[] | null;
+  hal: any[] | null;
   errors: string[];
 }
 
@@ -24,7 +25,7 @@ interface NormalizedPaper {
 export default function createServer() {
   const server = new McpServer({
     name: "Multi-Source Citation Verifier",
-    version: "3.0.0",
+    version: "3.1.0",
   });
 
 
@@ -69,6 +70,7 @@ export default function createServer() {
       semanticscholar: null,
       dblp: null,
       eric: null,
+      hal: null,
       errors: []
     };
 
@@ -155,6 +157,24 @@ export default function createServer() {
         return { source: 'eric', data: [] };
       })(),
 
+      // HAL search
+      (async () => {
+        try {
+          let halUrl = `https://api.archives-ouvertes.fr/search/?q=${encodeURIComponent(query)}&wt=json&rows=3`;
+          if (filters.year) {
+            halUrl += `&fq=publicationDateY_i:${filters.year}`;
+          }
+          const response = await fetch(halUrl);
+          if (response.ok) {
+            const data = await response.json();
+            return { source: 'hal', data: data.response?.docs || [] };
+          }
+        } catch (error) {
+          // Return empty if API fails
+        }
+        return { source: 'hal', data: [] };
+      })(),
+
       // Semantic Scholar search
       (async () => {
         let semanticUrl = `https://api.semanticscholar.org/graph/v1/paper/search?query=${encodeURIComponent(query)}&limit=3&fields=paperId,title,authors,year,externalIds,venue`;
@@ -188,7 +208,7 @@ export default function createServer() {
         const { source, data } = result.value;
         results[source as keyof Omit<SearchResults, 'errors'>] = data;
       } else {
-        const sources = ['CrossRef', 'OpenAlex', 'PubMed', 'zbMATH', 'ERIC', 'Semantic Scholar', 'DBLP'];
+        const sources = ['CrossRef', 'OpenAlex', 'PubMed', 'zbMATH', 'ERIC', 'HAL', 'Semantic Scholar', 'DBLP'];
         results.errors.push(`${sources[index]} error: ${result.reason?.message || 'Unknown error'}`);
       }
     });
@@ -251,6 +271,16 @@ export default function createServer() {
           year: result.publicationdateyear ? parseInt(result.publicationdateyear) : undefined,
           doi: result.doi,
           journal: result.source || result.publicationtype,
+        };
+
+      case 'hal':
+        return {
+          source: 'HAL',
+          title: result.title_s?.[0] || result.en_title_s?.[0],
+          authors: result.authFullName_s,
+          year: result.publicationDateY_i,
+          doi: result.doiId_s,
+          journal: result.journalTitle_s || result.bookTitle_s,
         };
 
       case 'semanticscholar':
@@ -317,7 +347,7 @@ export default function createServer() {
   server.registerTool(
     "verifyCitation",
     {
-      description: "CRITICAL: Use this to verify ANY academic citation before mentioning it. Checks multiple databases (CrossRef, OpenAlex, PubMed, zbMATH, ERIC, Semantic Scholar, DBLP) if a paper exists. Returns null if not found.",
+      description: "CRITICAL: Use this to verify ANY academic citation before mentioning it. Checks multiple databases (CrossRef, OpenAlex, PubMed, zbMATH, ERIC, HAL, Semantic Scholar, DBLP) if a paper exists. Returns null if not found.",
       inputSchema: {
         title: z.string().optional().describe("Paper title (partial matches accepted)"),
         authors: z.array(z.string()).optional().describe("Author names (last names sufficient)"),
@@ -407,6 +437,9 @@ export default function createServer() {
         if (searchResults.eric) {
           normalizationPromises.push(...searchResults.eric.map((r: any) => normalizeResult(r, 'eric')));
         }
+        if (searchResults.hal) {
+          normalizationPromises.push(...searchResults.hal.map((r: any) => normalizeResult(r, 'hal')));
+        }
         if (searchResults.semanticscholar) {
           normalizationPromises.push(...searchResults.semanticscholar.map((r: any) => normalizeResult(r, 'semanticscholar')));
         }
@@ -423,7 +456,7 @@ export default function createServer() {
               text: JSON.stringify({
                 verified: false,
                 message: "⚠ No matching publications found in any database - this citation may be incorrect",
-                searchedSources: ['CrossRef', 'OpenAlex', 'PubMed', 'zbMATH', 'ERIC', 'Semantic Scholar', 'DBLP'],
+                searchedSources: ['CrossRef', 'OpenAlex', 'PubMed', 'zbMATH', 'ERIC', 'HAL', 'Semantic Scholar', 'DBLP'],
                 searchedFor: { title, authors, year, journal },
                 errors: searchResults.errors.length > 0 ? searchResults.errors : undefined
               }, null, 2)
@@ -502,13 +535,13 @@ export default function createServer() {
   server.registerTool(
     "findVerifiedPapers",
     {
-      description: "Search multiple academic databases (CrossRef, OpenAlex, PubMed, zbMATH, ERIC, Semantic Scholar, DBLP) for papers and return only verified, real citations with DOIs.",
+      description: "Search multiple academic databases (CrossRef, OpenAlex, PubMed, zbMATH, ERIC, HAL, Semantic Scholar, DBLP) for papers and return only verified, real citations with DOIs.",
       inputSchema: {
         query: z.string().describe("Search query (topic, keywords, author names)"),
         limit: z.number().min(1).max(20).default(5).describe("Number of results per source"),
         yearFrom: z.number().optional().describe("Minimum publication year"),
         yearTo: z.number().optional().describe("Maximum publication year"),
-        source: z.enum(['all', 'crossref', 'openalex', 'pubmed', 'zbmath', 'eric', 'semanticscholar', 'dblp']).default('all').describe("Which source to search"),
+        source: z.enum(['all', 'crossref', 'openalex', 'pubmed', 'zbmath', 'eric', 'hal', 'semanticscholar', 'dblp']).default('all').describe("Which source to search"),
       },
       annotations: {
         readOnlyHint: true,
@@ -516,7 +549,7 @@ export default function createServer() {
         idempotentHint: true,
       }
     },
-    async ({ query, limit = 5, yearFrom, yearTo, source = 'all' }: { query: string; limit?: number; yearFrom?: number; yearTo?: number; source?: 'all' | 'crossref' | 'openalex' | 'pubmed' | 'zbmath' | 'eric' | 'semanticscholar' | 'dblp' }) => {
+    async ({ query, limit = 5, yearFrom, yearTo, source = 'all' }: { query: string; limit?: number; yearFrom?: number; yearTo?: number; source?: 'all' | 'crossref' | 'openalex' | 'pubmed' | 'zbmath' | 'eric' | 'hal' | 'semanticscholar' | 'dblp' }) => {
       try {
         // Execute all API calls in parallel for maximum speed
         const apiPromises: Promise<{ source: string; items: any[] }>[] = [];
@@ -616,6 +649,29 @@ export default function createServer() {
               // Return empty if API fails
             }
             return { source: 'eric', items: [] };
+          })());
+        }
+
+        if (source === 'all' || source === 'hal') {
+          apiPromises.push((async () => {
+            try {
+              let halUrl = `https://api.archives-ouvertes.fr/search/?q=${encodeURIComponent(query)}&wt=json&rows=${limit}`;
+              if (yearFrom && yearTo) {
+                halUrl += `&fq=publicationDateY_i:[${yearFrom} TO ${yearTo}]`;
+              } else if (yearFrom) {
+                halUrl += `&fq=publicationDateY_i:[${yearFrom} TO *]`;
+              } else if (yearTo) {
+                halUrl += `&fq=publicationDateY_i:[* TO ${yearTo}]`;
+              }
+              const response = await fetch(halUrl);
+              if (response.ok) {
+                const data = await response.json();
+                return { source: 'hal', items: data.response?.docs || [] };
+              }
+            } catch (error) {
+              // Return empty if API fails
+            }
+            return { source: 'hal', items: [] };
           })());
         }
 
@@ -795,6 +851,12 @@ export default function createServer() {
               types: "Education research"
             },
             {
+              name: "HAL",
+              coverage: "4.4+ million documents (2.5M English)",
+              url: "https://hal.science",
+              types: "All disciplines, particularly strong in European humanities and social sciences"
+            },
+            {
               name: "Semantic Scholar",
               coverage: "200+ million papers",
               url: "https://www.semanticscholar.org",
@@ -846,7 +908,7 @@ Use when:
 1. **Never cite from memory** - Always verify first
 2. **Include DOI URLs** - Use the \`doiUrl\` field in responses
 3. **Check verification status** - Only cite if \`verified: true\`
-4. **Use appropriate database** - Choose PubMed for biomedical, zbMATH for mathematics, ERIC for education
+4. **Use appropriate database** - Choose PubMed for biomedical, zbMATH for mathematics, ERIC for education, HAL for humanities
 5. **Provide alternatives** - If verification fails, search for real papers instead
 
 ## Example Workflow
