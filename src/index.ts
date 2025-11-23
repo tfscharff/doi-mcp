@@ -6,9 +6,9 @@ interface SearchResults {
   openalex: any[] | null;
   pubmed: any[] | null;
   zbmath: any[] | null;
-  arxiv: any[] | null;
   semanticscholar: any[] | null;
   dblp: any[] | null;
+  eric: any[] | null;
   errors: string[];
 }
 
@@ -24,45 +24,9 @@ interface NormalizedPaper {
 export default function createServer() {
   const server = new McpServer({
     name: "Multi-Source Citation Verifier",
-    version: "2.0.0",
+    version: "3.0.0",
   });
 
-  // Helper function to parse arXiv XML responses
-  function parseArxivXml(xmlText: string): any[] {
-    const entries: any[] = [];
-    const entryRegex = /<entry>([\s\S]*?)<\/entry>/g;
-    let entryMatch;
-
-    while ((entryMatch = entryRegex.exec(xmlText)) !== null) {
-      const entryXml = entryMatch[1];
-
-      // Extract fields from entry
-      const titleMatch = entryXml.match(/<title>([\s\S]*?)<\/title>/);
-      const idMatch = entryXml.match(/<id>([\s\S]*?)<\/id>/);
-      const updatedMatch = entryXml.match(/<updated>([\s\S]*?)<\/updated>/);
-      const doiMatch = entryXml.match(/<arxiv:doi[^>]*>([\s\S]*?)<\/arxiv:doi>/);
-      const journalMatch = entryXml.match(/<arxiv:journal_ref[^>]*>([\s\S]*?)<\/arxiv:journal_ref>/);
-
-      // Extract authors
-      const authors: string[] = [];
-      const authorRegex = /<author>[\s\S]*?<name>([\s\S]*?)<\/name>[\s\S]*?<\/author>/g;
-      let authorMatch;
-      while ((authorMatch = authorRegex.exec(entryXml)) !== null) {
-        authors.push(authorMatch[1].trim());
-      }
-
-      entries.push({
-        title: titleMatch ? titleMatch[1].trim().replace(/\s+/g, ' ') : undefined,
-        id: idMatch ? idMatch[1].trim() : undefined,
-        updated: updatedMatch ? updatedMatch[1].trim() : undefined,
-        doi: doiMatch ? doiMatch[1].trim() : undefined,
-        journal_ref: journalMatch ? journalMatch[1].trim() : undefined,
-        authors: authors
-      });
-    }
-
-    return entries;
-  }
 
   // Helper function to batch fetch DOIs from PubMed
   async function getDOIsFromPubMed(pmids: string[]): Promise<Map<string, string>> {
@@ -102,9 +66,9 @@ export default function createServer() {
       openalex: null,
       pubmed: null,
       zbmath: null,
-      arxiv: null,
       semanticscholar: null,
       dblp: null,
+      eric: null,
       errors: []
     };
 
@@ -126,7 +90,7 @@ export default function createServer() {
 
       // OpenAlex search
       (async () => {
-        let openalexUrl = `https://api.openalex.org/works?search=${encodeURIComponent(query)}`;
+        let openalexUrl = `https://api.openalex.org/works?search=${encodeURIComponent(query)}&per_page=3`;
         if (filters.year) {
           openalexUrl += `&filter=publication_year:${filters.year}`;
         }
@@ -176,15 +140,19 @@ export default function createServer() {
         return { source: 'zbmath', data: [] };
       })(),
 
-      // arXiv search
+      // ERIC search
       (async () => {
-        const arxivUrl = `http://export.arxiv.org/api/query?search_query=all:${encodeURIComponent(query)}&start=0&max_results=3`;
-        const response = await fetch(arxivUrl);
-        if (response.ok) {
-          const xmlText = await response.text();
-          return { source: 'arxiv', data: parseArxivXml(xmlText) };
+        try {
+          const ericUrl = `https://api.ies.ed.gov/eric/?search=${encodeURIComponent(query)}&rows=3&format=json`;
+          const response = await fetch(ericUrl);
+          if (response.ok) {
+            const data = await response.json();
+            return { source: 'eric', data: data.response?.docs || [] };
+          }
+        } catch (error) {
+          // Return empty if API fails
         }
-        return { source: 'arxiv', data: [] };
+        return { source: 'eric', data: [] };
       })(),
 
       // Semantic Scholar search
@@ -220,7 +188,7 @@ export default function createServer() {
         const { source, data } = result.value;
         results[source as keyof Omit<SearchResults, 'errors'>] = data;
       } else {
-        const sources = ['CrossRef', 'OpenAlex', 'PubMed', 'zbMATH', 'arXiv', 'Semantic Scholar', 'DBLP'];
+        const sources = ['CrossRef', 'OpenAlex', 'PubMed', 'zbMATH', 'ERIC', 'Semantic Scholar', 'DBLP'];
         results.errors.push(`${sources[index]} error: ${result.reason?.message || 'Unknown error'}`);
       }
     });
@@ -275,30 +243,14 @@ export default function createServer() {
           journal: result.source || result.journal,
         };
 
-      case 'arxiv':
-        // Extract year from updated date (ISO 8601 format: 2023-01-15T10:30:00Z)
-        let arxivYear: number | undefined = undefined;
-        if (result.updated) {
-          const yearMatch = result.updated.match(/^(\d{4})/);
-          if (yearMatch) {
-            arxivYear = parseInt(yearMatch[1]);
-          }
-        }
-
-        // Extract arXiv ID from full URL
-        let arxivId: string | undefined = undefined;
-        if (result.id) {
-          const idMatch = result.id.match(/arxiv\.org\/abs\/(.+)$/);
-          arxivId = idMatch ? idMatch[1] : undefined;
-        }
-
+      case 'eric':
         return {
-          source: 'arXiv',
+          source: 'ERIC',
           title: result.title,
-          authors: result.authors,
-          year: arxivYear,
-          doi: result.doi || undefined,
-          journal: result.journal_ref || (arxivId ? `arXiv:${arxivId}` : 'arXiv preprint'),
+          authors: result.author?.filter(Boolean),
+          year: result.publicationdateyear ? parseInt(result.publicationdateyear) : undefined,
+          doi: result.doi,
+          journal: result.source || result.publicationtype,
         };
 
       case 'semanticscholar':
@@ -332,26 +284,32 @@ export default function createServer() {
 
   function calculateMatchScore(result: NormalizedPaper, filters: { title?: string; authors?: string[]; year?: number; journal?: string }): number {
     let score = 0;
-    
+
+    // Title matching - cache lowercased values
     if (filters.title && result.title) {
-      const titleMatch = result.title.toLowerCase().includes(filters.title.toLowerCase().substring(0, 30));
+      const filterTitleLower = filters.title.toLowerCase();
+      const resultTitleLower = result.title.toLowerCase();
+      // Use first 30 chars for fuzzy matching to handle slight variations
+      const titleMatch = resultTitleLower.includes(filterTitleLower.substring(0, Math.min(30, filterTitleLower.length)));
       if (titleMatch) score += 3;
     }
-    
+
+    // Year matching - exact match or within 1 year
     if (filters.year && result.year) {
       if (result.year === filters.year) score += 3;
       else if (Math.abs(result.year - filters.year) <= 1) score += 1;
     }
-    
-    if (filters.authors && result.authors) {
-      const matchedAuthors = filters.authors.filter((filterAuthor: string) => 
-        result.authors?.some((resultAuthor: string) => 
-          resultAuthor.toLowerCase().includes(filterAuthor.toLowerCase().split(' ').pop() || '')
-        )
-      );
+
+    // Author matching - cache lowercased author names
+    if (filters.authors && filters.authors.length > 0 && result.authors && result.authors.length > 0) {
+      const resultAuthorsLower = result.authors.map(a => a.toLowerCase());
+      const matchedAuthors = filters.authors.filter((filterAuthor: string) => {
+        const lastName = filterAuthor.toLowerCase().split(' ').pop() || '';
+        return resultAuthorsLower.some((resultAuthor: string) => resultAuthor.includes(lastName));
+      });
       score += matchedAuthors.length * 2;
     }
-    
+
     return score;
   }
 
@@ -359,7 +317,7 @@ export default function createServer() {
   server.registerTool(
     "verifyCitation",
     {
-      description: "CRITICAL: Use this to verify ANY academic citation before mentioning it. Checks multiple databases (CrossRef, OpenAlex, PubMed, zbMATH, arXiv, Semantic Scholar, DBLP) if a paper exists. Returns null if not found.",
+      description: "CRITICAL: Use this to verify ANY academic citation before mentioning it. Checks multiple databases (CrossRef, OpenAlex, PubMed, zbMATH, ERIC, Semantic Scholar, DBLP) if a paper exists. Returns null if not found.",
       inputSchema: {
         title: z.string().optional().describe("Paper title (partial matches accepted)"),
         authors: z.array(z.string()).optional().describe("Author names (last names sufficient)"),
@@ -446,8 +404,8 @@ export default function createServer() {
         if (searchResults.zbmath) {
           normalizationPromises.push(...searchResults.zbmath.map((r: any) => normalizeResult(r, 'zbmath')));
         }
-        if (searchResults.arxiv) {
-          normalizationPromises.push(...searchResults.arxiv.map((r: any) => normalizeResult(r, 'arxiv')));
+        if (searchResults.eric) {
+          normalizationPromises.push(...searchResults.eric.map((r: any) => normalizeResult(r, 'eric')));
         }
         if (searchResults.semanticscholar) {
           normalizationPromises.push(...searchResults.semanticscholar.map((r: any) => normalizeResult(r, 'semanticscholar')));
@@ -465,7 +423,7 @@ export default function createServer() {
               text: JSON.stringify({
                 verified: false,
                 message: "⚠ No matching publications found in any database - this citation may be incorrect",
-                searchedSources: ['CrossRef', 'OpenAlex', 'PubMed', 'zbMATH', 'arXiv', 'Semantic Scholar', 'DBLP'],
+                searchedSources: ['CrossRef', 'OpenAlex', 'PubMed', 'zbMATH', 'ERIC', 'Semantic Scholar', 'DBLP'],
                 searchedFor: { title, authors, year, journal },
                 errors: searchResults.errors.length > 0 ? searchResults.errors : undefined
               }, null, 2)
@@ -481,6 +439,10 @@ export default function createServer() {
           if (score > bestScore) {
             bestScore = score;
             bestMatch = result;
+            // Early exit if we have a very high confidence match (title + year + author)
+            if (bestScore >= 8) {
+              break;
+            }
           }
         }
 
@@ -540,13 +502,13 @@ export default function createServer() {
   server.registerTool(
     "findVerifiedPapers",
     {
-      description: "Search multiple academic databases (CrossRef, OpenAlex, PubMed, zbMATH, arXiv, Semantic Scholar, DBLP) for papers and return only verified, real citations with DOIs.",
+      description: "Search multiple academic databases (CrossRef, OpenAlex, PubMed, zbMATH, ERIC, Semantic Scholar, DBLP) for papers and return only verified, real citations with DOIs.",
       inputSchema: {
         query: z.string().describe("Search query (topic, keywords, author names)"),
         limit: z.number().min(1).max(20).default(5).describe("Number of results per source"),
         yearFrom: z.number().optional().describe("Minimum publication year"),
         yearTo: z.number().optional().describe("Maximum publication year"),
-        source: z.enum(['all', 'crossref', 'openalex', 'pubmed', 'zbmath', 'arxiv', 'semanticscholar', 'dblp']).default('all').describe("Which source to search"),
+        source: z.enum(['all', 'crossref', 'openalex', 'pubmed', 'zbmath', 'eric', 'semanticscholar', 'dblp']).default('all').describe("Which source to search"),
       },
       annotations: {
         readOnlyHint: true,
@@ -554,7 +516,7 @@ export default function createServer() {
         idempotentHint: true,
       }
     },
-    async ({ query, limit = 5, yearFrom, yearTo, source = 'all' }: { query: string; limit?: number; yearFrom?: number; yearTo?: number; source?: 'all' | 'crossref' | 'openalex' | 'pubmed' | 'zbmath' | 'arxiv' | 'semanticscholar' | 'dblp' }) => {
+    async ({ query, limit = 5, yearFrom, yearTo, source = 'all' }: { query: string; limit?: number; yearFrom?: number; yearTo?: number; source?: 'all' | 'crossref' | 'openalex' | 'pubmed' | 'zbmath' | 'eric' | 'semanticscholar' | 'dblp' }) => {
       try {
         // Execute all API calls in parallel for maximum speed
         const apiPromises: Promise<{ source: string; items: any[] }>[] = [];
@@ -641,29 +603,19 @@ export default function createServer() {
           })());
         }
 
-        if (source === 'all' || source === 'arxiv') {
+        if (source === 'all' || source === 'eric') {
           apiPromises.push((async () => {
-            const arxivUrl = `http://export.arxiv.org/api/query?search_query=all:${encodeURIComponent(query)}&start=0&max_results=${limit}`;
-            const response = await fetch(arxivUrl);
-
-            if (response.ok) {
-              const xmlText = await response.text();
-              const entries = parseArxivXml(xmlText);
-
-              // Filter by year if specified
-              const filtered = entries.filter(entry => {
-                if (!yearFrom && !yearTo) return true;
-                const yearMatch = entry.updated?.match(/^(\d{4})/);
-                if (!yearMatch) return true;
-                const entryYear = parseInt(yearMatch[1]);
-                if (yearFrom && entryYear < yearFrom) return false;
-                if (yearTo && entryYear > yearTo) return false;
-                return true;
-              });
-
-              return { source: 'arxiv', items: filtered };
+            try {
+              const ericUrl = `https://api.ies.ed.gov/eric/?search=${encodeURIComponent(query)}&rows=${limit}&format=json`;
+              const response = await fetch(ericUrl);
+              if (response.ok) {
+                const data = await response.json();
+                return { source: 'eric', items: data.response?.docs || [] };
+              }
+            } catch (error) {
+              // Return empty if API fails
             }
-            return { source: 'arxiv', items: [] };
+            return { source: 'eric', items: [] };
           })());
         }
 
@@ -837,10 +789,10 @@ export default function createServer() {
               types: "Mathematics and related fields"
             },
             {
-              name: "arXiv",
-              coverage: "2+ million preprints",
-              url: "https://arxiv.org",
-              types: "Physics, mathematics, computer science, and more"
+              name: "ERIC",
+              coverage: "1.7+ million education publications",
+              url: "https://eric.ed.gov",
+              types: "Education research"
             },
             {
               name: "Semantic Scholar",
@@ -894,7 +846,7 @@ Use when:
 1. **Never cite from memory** - Always verify first
 2. **Include DOI URLs** - Use the \`doiUrl\` field in responses
 3. **Check verification status** - Only cite if \`verified: true\`
-4. **Use appropriate database** - Choose PubMed for biomedical topics, zbMATH for mathematics, arXiv for preprints
+4. **Use appropriate database** - Choose PubMed for biomedical, zbMATH for mathematics, ERIC for education
 5. **Provide alternatives** - If verification fails, search for real papers instead
 
 ## Example Workflow

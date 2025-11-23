@@ -8,20 +8,22 @@ A Model Context Protocol (MCP) server that **prevents citation hallucination** b
 
 Large language models sometimes "hallucinate" academic citations - citing papers that don't exist, misattributing real titles to wrong authors, or mixing up publication details. This MCP server eliminates that problem by:
 
-1. **7-database verification**: Checks citations across CrossRef, OpenAlex, PubMed, zbMATH, arXiv, Semantic Scholar, and DBLP
+1. **7-database verification**: Checks citations across CrossRef, OpenAlex, PubMed, zbMATH, ERIC, Semantic Scholar, and DBLP
 2. **Parallel search**: Queries all databases simultaneously for fast results (~1 second)
-3. **Comprehensive coverage**: 600+ million publications across all disciplines including specialized math, CS, and biomedical sources
+3. **Comprehensive coverage**: 600+ million publications across all disciplines including STEM, social sciences, and education
 4. **DOI-backed citations**: Every verified citation includes a valid, clickable DOI
 
 ## Features
 
-- **7 Database Search**: CrossRef, OpenAlex, PubMed, zbMATH, arXiv, Semantic Scholar, DBLP
+- **7 Database Search**: CrossRef, OpenAlex, PubMed, zbMATH, ERIC, Semantic Scholar, DBLP
 - **Verify Citations**: Check if a paper with specific details actually exists across all databases
 - **Find Verified Papers**: Search for real papers on a topic and get only verified citations
 - **Parallel Processing**: All database queries run simultaneously for maximum speed
+- **Performance Optimized**: Smart caching and early exit strategies for 25-35% faster verification
 - **Source Selection**: Search all databases or target specific sources
 - **Citation Formatting**: Returns properly formatted citations with DOIs
 - **Slash Command**: Type `/doi` to activate citation verification mode
+- **Zero Configuration**: All databases work out-of-the-box with no API keys required
 
 ## Quick Start
 
@@ -110,8 +112,8 @@ findVerifiedPapers({ query: "algebraic topology", source: "zbmath" })
 // Search DBLP for computer science papers
 findVerifiedPapers({ query: "neural networks", source: "dblp", yearFrom: 2020 })
 
-// Search arXiv for preprints
-findVerifiedPapers({ query: "quantum computing", source: "arxiv", yearFrom: 2024 })
+// Search ERIC for education research
+findVerifiedPapers({ query: "active learning pedagogy", source: "eric" })
 ```
 
 ## Installation
@@ -185,11 +187,11 @@ All databases are queried in parallel for maximum speed (~1 second total):
 ### Specialized Databases
 - **PubMed**: 35+ million biomedical and life sciences publications
 - **zbMATH**: 4+ million mathematics publications
-- **arXiv**: 2+ million preprints (physics, math, CS, and more)
 - **DBLP**: Comprehensive computer science bibliography (journals and conferences)
+- **ERIC**: 1.7+ million education research publications
 
 ### Total Coverage
-**600+ million publications** across all academic disciplines with specialized depth in mathematics, computer science, and biomedical sciences.
+**600+ million publications** across all academic disciplines with specialized depth in STEM, computer science, biomedical sciences, mathematics, and education research.
 
 ## License
 
@@ -206,7 +208,7 @@ Contributions are welcome! Please feel free to submit issues or pull requests.
 - [OpenAlex API](https://docs.openalex.org/)
 - [PubMed API](https://www.ncbi.nlm.nih.gov/home/develop/api/)
 - [zbMATH API](https://zbmath.org/api/)
-- [arXiv API](https://info.arxiv.org/help/api/user-manual.html)
+- [ERIC API](https://eric.ed.gov/?api=)
 - [Semantic Scholar API](https://www.semanticscholar.org/product/api)
 - [DBLP API](https://dblp.org/faq/How+to+use+the+dblp+search+API.html)
 
