@@ -22,27 +22,7 @@ Large language models sometimes "hallucinate" academic citations - citing papers
 - **Performance Optimized**: Smart caching and early exit strategies for 25-35% faster verification
 - **Source Selection**: Search all databases or target specific sources
 - **Citation Formatting**: Returns properly formatted citations with DOIs
-- **Slash Command**: Type `/doi` to activate citation verification mode
 - **Zero Configuration**: All databases work out-of-the-box with no API keys required
-
-## Quick Start
-
-### Using the `/doi` Slash Command
-
-Type `/doi` in Claude Code to activate citation verification mode:
-
-```
-User: /doi
-User: What research exists on quantum computing?
-Claude: [Automatically uses findVerifiedPapers to search 7 databases]
-Claude: [Returns only verified papers with real DOIs]
-```
-
-This puts Claude into a mode where it will:
-- Use `verifyCitation` before citing any specific paper
-- Use `findVerifiedPapers` when searching for research
-- Never cite papers from memory
-- Always include DOI URLs
 
 ## How It Works
 
