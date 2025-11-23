@@ -39,3 +39,8 @@ coverage/
 # Temporary files
 tmp/
 temp/
+
+# Chart generation
+create_coverage_chart.py
+coverage-chart.png
+coverage-map.svg

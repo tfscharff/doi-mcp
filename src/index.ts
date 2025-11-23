@@ -557,8 +557,13 @@ export default function createServer() {
         if (source === 'all' || source === 'crossref') {
           apiPromises.push((async () => {
             let crossrefUrl = `https://api.crossref.org/works?query=${encodeURIComponent(query)}&rows=${limit}`;
-            if (yearFrom) crossrefUrl += `&filter=from-pub-date:${yearFrom}`;
-            if (yearTo) crossrefUrl += `&filter=until-pub-date:${yearTo}`;
+            if (yearFrom && yearTo) {
+              crossrefUrl += `&filter=from-pub-date:${yearFrom},until-pub-date:${yearTo}`;
+            } else if (yearFrom) {
+              crossrefUrl += `&filter=from-pub-date:${yearFrom}`;
+            } else if (yearTo) {
+              crossrefUrl += `&filter=until-pub-date:${yearTo}`;
+            }
 
             const response = await fetch(crossrefUrl);
             if (response.ok) {
@@ -678,10 +683,11 @@ export default function createServer() {
         if (source === 'all' || source === 'semanticscholar') {
           apiPromises.push((async () => {
             let semanticUrl = `https://api.semanticscholar.org/graph/v1/paper/search?query=${encodeURIComponent(query)}&limit=${limit}&fields=paperId,title,authors,year,externalIds,venue`;
-            if (yearFrom) {
+            if (yearFrom && yearTo) {
+              semanticUrl += `&year=${yearFrom}-${yearTo}`;
+            } else if (yearFrom) {
               semanticUrl += `&year=${yearFrom}-`;
-            }
-            if (yearTo && !yearFrom) {
+            } else if (yearTo) {
               semanticUrl += `&year=-${yearTo}`;
             }
 
@@ -852,9 +858,9 @@ export default function createServer() {
             },
             {
               name: "HAL",
-              coverage: "4.4+ million documents (2.5M English)",
+              coverage: "4.4+ million documents",
               url: "https://hal.science",
-              types: "All disciplines, particularly strong in European humanities and social sciences"
+              types: "All disciplines, particularly strong in humanities and social sciences"
             },
             {
               name: "Semantic Scholar",
