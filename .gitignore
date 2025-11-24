@@ -42,5 +42,7 @@ temp/
 
 # Chart generation
 create_coverage_chart.py
+create_nested_coverage_chart.py
 coverage-chart.png
+coverage-nested-chart.png
 coverage-map.svg

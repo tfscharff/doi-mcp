@@ -10,6 +10,7 @@ interface SearchResults {
   dblp: any[] | null;
   eric: any[] | null;
   hal: any[] | null;
+  inspirehep: any[] | null;
   errors: string[];
 }
 
@@ -25,7 +26,7 @@ interface NormalizedPaper {
 export default function createServer() {
   const server = new McpServer({
     name: "Multi-Source Citation Verifier",
-    version: "3.1.0",
+    version: "3.2.0",
   });
 
 
@@ -71,6 +72,7 @@ export default function createServer() {
       dblp: null,
       eric: null,
       hal: null,
+      inspirehep: null,
       errors: []
     };
 
@@ -175,6 +177,25 @@ export default function createServer() {
         return { source: 'hal', data: [] };
       })(),
 
+      // INSPIRE-HEP search (high-energy physics)
+      (async () => {
+        try {
+          let inspireQuery = query;
+          if (filters.year) {
+            inspireQuery = `${query} and date ${filters.year}`;
+          }
+          const inspireUrl = `https://inspirehep.net/api/literature?q=${encodeURIComponent(inspireQuery)}&size=3&sort=mostrecent`;
+          const response = await fetch(inspireUrl);
+          if (response.ok) {
+            const data = await response.json();
+            return { source: 'inspirehep', data: data.hits?.hits || [] };
+          }
+        } catch (error) {
+          // Return empty if API fails
+        }
+        return { source: 'inspirehep', data: [] };
+      })(),
+
       // Semantic Scholar search
       (async () => {
         let semanticUrl = `https://api.semanticscholar.org/graph/v1/paper/search?query=${encodeURIComponent(query)}&limit=3&fields=paperId,title,authors,year,externalIds,venue`;
@@ -208,7 +229,7 @@ export default function createServer() {
         const { source, data } = result.value;
         results[source as keyof Omit<SearchResults, 'errors'>] = data;
       } else {
-        const sources = ['CrossRef', 'OpenAlex', 'PubMed', 'zbMATH', 'ERIC', 'HAL', 'Semantic Scholar', 'DBLP'];
+        const sources = ['CrossRef', 'OpenAlex', 'PubMed', 'zbMATH', 'ERIC', 'HAL', 'INSPIRE-HEP', 'Semantic Scholar', 'DBLP'];
         results.errors.push(`${sources[index]} error: ${result.reason?.message || 'Unknown error'}`);
       }
     });
@@ -283,6 +304,17 @@ export default function createServer() {
           journal: result.journalTitle_s || result.bookTitle_s,
         };
 
+      case 'inspirehep':
+        const metadata = result.metadata || {};
+        return {
+          source: 'INSPIRE-HEP',
+          title: metadata.titles?.[0]?.title,
+          authors: metadata.authors?.map((a: any) => a.full_name).filter(Boolean),
+          year: metadata.publication_info?.[0]?.year ? parseInt(metadata.publication_info[0].year) : metadata.preprint_date ? new Date(metadata.preprint_date).getFullYear() : undefined,
+          doi: metadata.dois?.[0]?.value,
+          journal: metadata.publication_info?.[0]?.journal_title || metadata.publication_info?.[0]?.conference_record?.titles?.[0]?.title,
+        };
+
       case 'semanticscholar':
         return {
           source: 'Semantic Scholar',
@@ -347,7 +379,7 @@ export default function createServer() {
   server.registerTool(
     "verifyCitation",
     {
-      description: "CRITICAL: Use this to verify ANY academic citation before mentioning it. Checks multiple databases (CrossRef, OpenAlex, PubMed, zbMATH, ERIC, HAL, Semantic Scholar, DBLP) if a paper exists. Returns null if not found.",
+      description: "CRITICAL: Use this to verify ANY academic citation before mentioning it. Checks multiple databases (CrossRef, OpenAlex, PubMed, zbMATH, ERIC, HAL, INSPIRE-HEP, Semantic Scholar, DBLP) if a paper exists. Returns null if not found.",
       inputSchema: {
         title: z.string().optional().describe("Paper title (partial matches accepted)"),
         authors: z.array(z.string()).optional().describe("Author names (last names sufficient)"),
@@ -440,6 +472,9 @@ export default function createServer() {
         if (searchResults.hal) {
           normalizationPromises.push(...searchResults.hal.map((r: any) => normalizeResult(r, 'hal')));
         }
+        if (searchResults.inspirehep) {
+          normalizationPromises.push(...searchResults.inspirehep.map((r: any) => normalizeResult(r, 'inspirehep')));
+        }
         if (searchResults.semanticscholar) {
           normalizationPromises.push(...searchResults.semanticscholar.map((r: any) => normalizeResult(r, 'semanticscholar')));
         }
@@ -456,7 +491,7 @@ export default function createServer() {
               text: JSON.stringify({
                 verified: false,
                 message: "⚠ No matching publications found in any database - this citation may be incorrect",
-                searchedSources: ['CrossRef', 'OpenAlex', 'PubMed', 'zbMATH', 'ERIC', 'HAL', 'Semantic Scholar', 'DBLP'],
+                searchedSources: ['CrossRef', 'OpenAlex', 'PubMed', 'zbMATH', 'ERIC', 'HAL', 'INSPIRE-HEP', 'Semantic Scholar', 'DBLP'],
                 searchedFor: { title, authors, year, journal },
                 errors: searchResults.errors.length > 0 ? searchResults.errors : undefined
               }, null, 2)
@@ -535,13 +570,13 @@ export default function createServer() {
   server.registerTool(
     "findVerifiedPapers",
     {
-      description: "Search multiple academic databases (CrossRef, OpenAlex, PubMed, zbMATH, ERIC, HAL, Semantic Scholar, DBLP) for papers and return only verified, real citations with DOIs.",
+      description: "Search multiple academic databases (CrossRef, OpenAlex, PubMed, zbMATH, ERIC, HAL, INSPIRE-HEP, Semantic Scholar, DBLP) for papers and return only verified, real citations with DOIs.",
       inputSchema: {
         query: z.string().describe("Search query (topic, keywords, author names)"),
         limit: z.number().min(1).max(20).default(5).describe("Number of results per source"),
         yearFrom: z.number().optional().describe("Minimum publication year"),
         yearTo: z.number().optional().describe("Maximum publication year"),
-        source: z.enum(['all', 'crossref', 'openalex', 'pubmed', 'zbmath', 'eric', 'hal', 'semanticscholar', 'dblp']).default('all').describe("Which source to search"),
+        source: z.enum(['all', 'crossref', 'openalex', 'pubmed', 'zbmath', 'eric', 'hal', 'inspirehep', 'semanticscholar', 'dblp']).default('all').describe("Which source to search"),
       },
       annotations: {
         readOnlyHint: true,
@@ -549,7 +584,7 @@ export default function createServer() {
         idempotentHint: true,
       }
     },
-    async ({ query, limit = 5, yearFrom, yearTo, source = 'all' }: { query: string; limit?: number; yearFrom?: number; yearTo?: number; source?: 'all' | 'crossref' | 'openalex' | 'pubmed' | 'zbmath' | 'eric' | 'hal' | 'semanticscholar' | 'dblp' }) => {
+    async ({ query, limit = 5, yearFrom, yearTo, source = 'all' }: { query: string; limit?: number; yearFrom?: number; yearTo?: number; source?: 'all' | 'crossref' | 'openalex' | 'pubmed' | 'zbmath' | 'eric' | 'hal' | 'inspirehep' | 'semanticscholar' | 'dblp' }) => {
       try {
         // Execute all API calls in parallel for maximum speed
         const apiPromises: Promise<{ source: string; items: any[] }>[] = [];
@@ -677,6 +712,29 @@ export default function createServer() {
               // Return empty if API fails
             }
             return { source: 'hal', items: [] };
+          })());
+        }
+
+        if (source === 'all' || source === 'inspirehep') {
+          apiPromises.push((async () => {
+            try {
+              let inspireUrl = `https://inspirehep.net/api/literature?q=${encodeURIComponent(query)}&size=${limit}`;
+              if (yearFrom && yearTo) {
+                inspireUrl = `https://inspirehep.net/api/literature?q=${encodeURIComponent(query)}+and+date+${yearFrom}--${yearTo}&size=${limit}`;
+              } else if (yearFrom) {
+                inspireUrl = `https://inspirehep.net/api/literature?q=${encodeURIComponent(query)}+and+date+${yearFrom}--&size=${limit}`;
+              } else if (yearTo) {
+                inspireUrl = `https://inspirehep.net/api/literature?q=${encodeURIComponent(query)}+and+date+--${yearTo}&size=${limit}`;
+              }
+              const response = await fetch(inspireUrl);
+              if (response.ok) {
+                const data = await response.json();
+                return { source: 'inspirehep', items: data.hits?.hits || [] };
+              }
+            } catch (error) {
+              // Return empty if API fails
+            }
+            return { source: 'inspirehep', items: [] };
           })());
         }
 
@@ -863,6 +921,12 @@ export default function createServer() {
               types: "All disciplines, particularly strong in humanities and social sciences"
             },
             {
+              name: "INSPIRE-HEP",
+              coverage: "1.7+ million high-energy physics publications",
+              url: "https://inspirehep.net",
+              types: "High-energy physics, particle physics, and related fields"
+            },
+            {
               name: "Semantic Scholar",
               coverage: "200+ million papers",
               url: "https://www.semanticscholar.org",
@@ -914,7 +978,7 @@ Use when:
 1. **Never cite from memory** - Always verify first
 2. **Include DOI URLs** - Use the \`doiUrl\` field in responses
 3. **Check verification status** - Only cite if \`verified: true\`
-4. **Use appropriate database** - Choose PubMed for biomedical, zbMATH for mathematics, ERIC for education, HAL for humanities
+4. **Use appropriate database** - Choose PubMed for biomedical, zbMATH for mathematics, ERIC for education, HAL for humanities, INSPIRE-HEP for physics
 5. **Provide alternatives** - If verification fails, search for real papers instead
 
 ## Example Workflow

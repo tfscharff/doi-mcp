@@ -2,20 +2,20 @@
 
 [![smithery badge](https://smithery.ai/badge/@tfscharff/doi-mcp)](https://smithery.ai/server/@tfscharff/doi-mcp)
 
-A Model Context Protocol (MCP) server that **prevents citation hallucination** by verifying academic citations against **8 authoritative databases**. This server enables AI assistants to verify every citation against real publications before citing them.
+A Model Context Protocol (MCP) server that **prevents citation hallucination** by verifying academic citations against **9 authoritative databases**. This server enables AI assistants to verify every citation against real publications before citing them.
 
 ## The Problem This Solves
 
 Large language models sometimes "hallucinate" academic citations - citing papers that don't exist, misattributing real titles to wrong authors, or mixing up publication details. This MCP server eliminates that problem by:
 
-1. **8-database verification**: Checks citations across CrossRef, OpenAlex, PubMed, zbMATH, ERIC, HAL, Semantic Scholar, and DBLP
+1. **9-database verification**: Checks citations across CrossRef, OpenAlex, PubMed, zbMATH, ERIC, HAL, INSPIRE-HEP, Semantic Scholar, and DBLP
 2. **Parallel search**: Queries all databases simultaneously for fast results (~1 second)
 3. **Comprehensive coverage**: 600+ million publications across all disciplines including STEM, humanities, social sciences, and education
 4. **DOI-backed citations**: Every verified citation includes a valid, clickable DOI
 
 ## Features
 
-- **8 Database Search**: CrossRef, OpenAlex, PubMed, zbMATH, ERIC, HAL, Semantic Scholar, DBLP
+- **9 Database Search**: CrossRef, OpenAlex, PubMed, zbMATH, ERIC, HAL, INSPIRE-HEP, Semantic Scholar, DBLP
 - **Verify Citations**: Check if a paper with specific details actually exists across all databases
 - **Find Verified Papers**: Search for real papers on a topic and get only verified citations
 - **Parallel Processing**: All database queries run simultaneously for maximum speed
@@ -29,7 +29,7 @@ Large language models sometimes "hallucinate" academic citations - citing papers
 When an AI assistant is asked about research or for citations:
 
 1. **Without this MCP**: The assistant might cite "According to Smith et al. (2023) in Nature..." referencing a paper that doesn't exist
-2. **With this MCP**: The assistant uses `verifyCitation` first, which searches across 8 databases in parallel and returns:
+2. **With this MCP**: The assistant uses `verifyCitation` first, which searches across 9 databases in parallel and returns:
    - Verified match with full DOI → Can be cited
    - No match found → Cannot cite; must search for real papers instead
 
@@ -71,7 +71,7 @@ Search for real papers on a topic and return only verified citations with DOIs f
 
 **Input:**
 - `query` (string): Search query (topic, keywords, author names)
-- `source` (string, optional): Which database to search - "all" (default), "crossref", "openalex", "pubmed", "zbmath", "eric", "hal", "semanticscholar", or "dblp"
+- `source` (string, optional): Which database to search - "all" (default), "crossref", "openalex", "pubmed", "zbmath", "eric", "hal", "inspirehep", "semanticscholar", or "dblp"
 - `limit` (number, optional): Number of results per source (1-20, default: 5)
 - `yearFrom` (number, optional): Minimum publication year
 - `yearTo` (number, optional): Maximum publication year
@@ -80,7 +80,7 @@ Search for real papers on a topic and return only verified citations with DOIs f
 
 **Example:**
 ```javascript
-// Search all 8 databases
+// Search all 9 databases
 findVerifiedPapers({ query: "CRISPR gene editing", limit: 5 })
 
 // Search only PubMed for biomedical papers
@@ -97,6 +97,9 @@ findVerifiedPapers({ query: "active learning pedagogy", source: "eric" })
 
 // Search HAL for French/European humanities research
 findVerifiedPapers({ query: "phenomenology Husserl", source: "hal" })
+
+// Search INSPIRE-HEP for high-energy physics papers
+findVerifiedPapers({ query: "Higgs boson", source: "inspirehep" })
 ```
 
 ## Installation
@@ -153,9 +156,9 @@ Assistant: [Uses findVerifiedPapers tool]
 **Verification catches fake citations:**
 ```
 User: "Can you verify this citation: Smith et al. (2024), 'Quantum AI', Nature"
-Assistant: [Uses verifyCitation tool - searches all 8 databases in parallel]
+Assistant: [Uses verifyCitation tool - searches all 9 databases in parallel]
            "⚠ I cannot verify this citation - no matching publication found in
-            any of the 8 databases. This citation may be incorrect."
+            any of the 9 databases. This citation may be incorrect."
 ```
 
 ## Database Coverage
@@ -173,6 +176,7 @@ All databases are queried in parallel for maximum speed (~1 second total):
 - **DBLP**: Comprehensive computer science bibliography (journals and conferences)
 - **ERIC**: 1.7+ million education research publications
 - **HAL**: 4.4+ million French/European scholarly documents (2.5M English)
+- **INSPIRE-HEP**: 1.7+ million high-energy physics publications
 
 ### Total Coverage
 **600+ million publications** across all academic disciplines with specialized depth in STEM, computer science, biomedical sciences, mathematics, and education research.
@@ -194,6 +198,7 @@ Contributions are welcome! Please feel free to submit issues or pull requests.
 - [zbMATH API](https://zbmath.org/api/)
 - [ERIC API](https://eric.ed.gov/?api=)
 - [HAL API](https://api.archives-ouvertes.fr/docs/)
+- [INSPIRE-HEP API](https://github.com/inspirehep/rest-api-doc)
 - [Semantic Scholar API](https://www.semanticscholar.org/product/api)
 - [DBLP API](https://dblp.org/faq/How+to+use+the+dblp+search+API.html)
 
