@@ -1,5 +1,4 @@
 runtime: "container"
 startCommand:
-  command: "node"
-  args:
-    - "dist/index.js"
+  type: "stdio"
+  command: "node dist/index.js"
