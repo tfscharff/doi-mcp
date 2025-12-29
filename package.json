@@ -10,9 +10,6 @@
     "dev": "tsc --watch",
     "prepare": "npm run build"
   },
-  "smithery": {
-    "dockerfile": "Dockerfile"
-  },
   "keywords": [
     "mcp",
     "doi",

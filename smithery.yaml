@@ -1,3 +1,1 @@
-runtime: "typescript"
-aptPackages:
-  - libsecret-1-0
+runtime: "container"
