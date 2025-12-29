@@ -8,8 +8,10 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "prepare": "npm run build",
-	"postinstall": "apt-get update && apt-get install -y libsecret-1-0 || true"
+    "prepare": "npm run build"
+  },
+  "smithery": {
+    "entrypoint": "dist/index.js"
   },
   "keywords": [
     "mcp",
