@@ -8,7 +8,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "prepare": "npm run build"
+    "prepare": "npm run build",
   "smithery": {
     "dockerfile": "Dockerfile"
   },
