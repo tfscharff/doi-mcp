@@ -1,1 +1,2 @@
 runtime: "docker"
+startCommand: "node dist/index.js"
