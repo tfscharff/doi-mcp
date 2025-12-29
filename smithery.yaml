@@ -1,4 +1,1 @@
-runtime: "container"
-startCommand:
-  type: "stdio"
-  commandFunction: "node dist/index.js"
+runtime: "typescript"

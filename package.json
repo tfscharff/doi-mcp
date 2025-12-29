@@ -9,6 +9,7 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "prepare": "npm run build"
+	"postinstall": "apt-get update && apt-get install -y libsecret-1-0 || true"
   },
   "keywords": [
     "mcp",
