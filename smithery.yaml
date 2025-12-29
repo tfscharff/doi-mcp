@@ -1,2 +1,3 @@
-runtime: "container"
-startCommand: "node dist/index.js"
+runtime: "typescript"
+aptPackages:
+  - libsecret-1-0
