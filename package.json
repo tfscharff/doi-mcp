@@ -27,7 +27,6 @@
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.4",
-    "@smithery/sdk": "^1.0.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
