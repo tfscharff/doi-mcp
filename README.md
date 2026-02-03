@@ -20,8 +20,6 @@ Or add to your Claude Desktop config:
 }
 ```
 
-**[📖 Full Installation Guide](./INSTALL.md)**
-
 ## The Problem This Solves
 
 Large language models sometimes "hallucinate" academic citations - citing papers that don't exist, misattributing real titles to wrong authors, or mixing up publication details. This MCP server eliminates that problem by:
@@ -122,12 +120,81 @@ findVerifiedPapers({ query: "Higgs boson", source: "inspirehep" })
 
 ## Installation
 
-### Manual Installation
+Add to your Claude Desktop config file:
 
-1. Clone the repository
-2. Install dependencies: `npm install`
-3. Build the project: `npm run build`
-4. Add to your MCP client configuration
+**Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+**macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+**Linux**: `~/.config/Claude/claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "doi-mcp": {
+      "command": "npx",
+      "args": ["-y", "github:tfscharff/doi-mcp"]
+    }
+  }
+}
+```
+
+Restart Claude Desktop and the server will be available.
+
+### Alternative: Global Install
+
+```bash
+npm install -g github:tfscharff/doi-mcp
+```
+
+Then use this config:
+```json
+{
+  "mcpServers": {
+    "doi-mcp": {
+      "command": "doi-mcp"
+    }
+  }
+}
+```
+
+### Alternative: Clone Locally
+
+```bash
+git clone https://github.com/tfscharff/doi-mcp.git
+cd doi-mcp
+npm install
+npm run build
+```
+
+Config for local install:
+```json
+{
+  "mcpServers": {
+    "doi-mcp": {
+      "command": "node",
+      "args": ["/absolute/path/to/doi-mcp/dist/index.js"]
+    }
+  }
+}
+```
+
+## Troubleshooting
+
+### Server not connecting
+1. Check Node.js is installed: `node --version` (requires v18+)
+2. Check Claude Desktop logs:
+   - **Windows**: `%APPDATA%\Claude\logs\`
+   - **macOS**: `~/Library/Logs/Claude/`
+   - **Linux**: `~/.config/Claude/logs/`
+
+### npx command fails
+```bash
+npm cache clean --force
+```
+
+### Testing locally
+```bash
+npx @modelcontextprotocol/inspector node dist/index.js
+```
 
 ## Development
 
