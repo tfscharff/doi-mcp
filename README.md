@@ -1,8 +1,26 @@
 # DOI Citation Verifier MCP Server
 
-[![smithery badge](https://smithery.ai/badge/@tfscharff/doi-mcp)](https://smithery.ai/server/@tfscharff/doi-mcp)
-
 A Model Context Protocol (MCP) server that **prevents citation hallucination** by verifying academic citations against **9 authoritative databases**. This server enables AI assistants to verify every citation against real publications before citing them.
+
+## 🚀 Quick Install
+
+```bash
+npx -y github:tfscharff/doi-mcp
+```
+
+Or add to your Claude Desktop config:
+```json
+{
+  "mcpServers": {
+    "doi-mcp": {
+      "command": "npx",
+      "args": ["-y", "github:tfscharff/doi-mcp"]
+    }
+  }
+}
+```
+
+**[📖 Full Installation Guide](./INSTALL.md)**
 
 ## The Problem This Solves
 

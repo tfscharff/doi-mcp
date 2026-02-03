@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
@@ -1033,3 +1035,10 @@ Always verify first, cite second. Never cite first and verify later.`
 
   return server.server;
 }
+
+// Run the server when executed directly
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+
+const transport = new StdioServerTransport();
+const server = createServer();
+await server.connect(transport);
