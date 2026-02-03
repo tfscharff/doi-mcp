@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a Model Context Protocol (MCP) server that prevents citation hallucination by verifying academic citations against multiple authoritative databases (CrossRef, OpenAlex, and PubMed). It's built using the `@modelcontextprotocol/sdk` and deployed via Smithery.
+This is a Model Context Protocol (MCP) server that prevents citation hallucination by verifying academic citations against multiple authoritative databases (CrossRef, OpenAlex, and PubMed). It's built using the `@modelcontextprotocol/sdk`.
 
 ## Key Architecture
 
@@ -54,9 +54,6 @@ npm run build
 
 # Watch mode for development
 npm run dev
-
-# Test with Smithery CLI (after installing @smithery/cli)
-npx @smithery/cli dev
 ```
 
 ## API Integration Details
@@ -92,14 +89,6 @@ If a DOI is provided to `verifyCitation`, it's checked first via DOI.org API bef
 
 ### Deduplication
 `findVerifiedPapers` deduplicates results across sources using DOI or lowercase title as a unique key to avoid duplicate citations from multiple databases.
-
-## Smithery Deployment
-
-The server is deployed to Smithery automatically on git push. Quality score factors:
-- Tool annotations (implemented: readOnlyHint, destructiveHint, idempotentHint)
-- Optional configuration (no required config improves score)
-- Icon files (icon.png, icon.svg in repository root)
-- Runtime specified as "typescript" in smithery.yaml
 
 ## TypeScript Configuration
 

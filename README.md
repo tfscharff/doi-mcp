@@ -122,14 +122,6 @@ findVerifiedPapers({ query: "Higgs boson", source: "inspirehep" })
 
 ## Installation
 
-### Installing via Smithery
-
-To install DOI Citation Verifier automatically via [Smithery](https://smithery.ai/server/@tfscharff/doi-mcp):
-
-```bash
-npx -y @smithery/cli install @tfscharff/doi-mcp
-```
-
 ### Manual Installation
 
 1. Clone the repository
@@ -148,9 +140,6 @@ npm run build
 
 # Development with watch mode
 npm run dev
-
-# Test with Smithery CLI
-npx @smithery/cli dev
 ```
 
 ## Example Usage
