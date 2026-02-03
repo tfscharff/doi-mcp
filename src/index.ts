@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { createStatelessServer } from "@smithery/sdk/server/stateless.js";
 
 interface SearchResults {
   crossref: any[] | null;
@@ -23,7 +24,7 @@ interface NormalizedPaper {
   journal?: string;
 }
 
-export default function createServer() {
+function createMcpServer({ config }: { config?: any }) {
   const server = new McpServer({
     name: "Multi-Source Citation Verifier",
     version: "3.2.0",
@@ -1033,3 +1034,10 @@ Always verify first, cite second. Never cite first and verify later.`
 
   return server.server;
 }
+
+// Create and start the Smithery-compatible server
+const smitheryServer = createStatelessServer(createMcpServer);
+smitheryServer.app.listen(process.env.PORT || 3000);
+
+// Also export the createMcpServer function for backwards compatibility
+export default createMcpServer;
