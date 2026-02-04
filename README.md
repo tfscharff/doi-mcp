@@ -1,6 +1,18 @@
-# DOI Citation Verifier MCP Server
+<p align="center">
+  <img src="icon.png" alt="doi-mcp logo" width="128" height="128">
+</p>
 
-A Model Context Protocol (MCP) server that **prevents citation hallucination** by verifying academic citations against **9 authoritative databases**. This server enables AI assistants to verify every citation against real publications before citing them.
+<h1 align="center">doi-mcp</h1>
+
+<p align="center">
+  <a href="https://github.com/tfscharff/doi-mcp/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
+  <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen.svg" alt="Node.js >= 18"></a>
+  <a href="https://modelcontextprotocol.io/"><img src="https://img.shields.io/badge/MCP-compatible-purple.svg" alt="MCP Compatible"></a>
+</p>
+
+<p align="center">
+  A Model Context Protocol (MCP) server that <strong>prevents citation hallucination</strong> by verifying academic citations against <strong>9 authoritative databases</strong>. This server enables AI assistants to verify every citation against real publications before citing them.
+</p>
 
 ## 🚀 Quick Install
 
