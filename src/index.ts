@@ -23,12 +23,13 @@ interface NormalizedPaper {
   year?: number;
   doi?: string;
   journal?: string;
+  abstract?: string;
 }
 
 export default function createServer() {
   const server = new McpServer({
     name: "Multi-Source Citation Verifier",
-    version: "3.2.0",
+    version: "3.3.0",
   });
 
 
@@ -200,7 +201,7 @@ export default function createServer() {
 
       // Semantic Scholar search
       (async () => {
-        let semanticUrl = `https://api.semanticscholar.org/graph/v1/paper/search?query=${encodeURIComponent(query)}&limit=3&fields=paperId,title,authors,year,externalIds,venue`;
+        let semanticUrl = `https://api.semanticscholar.org/graph/v1/paper/search?query=${encodeURIComponent(query)}&limit=3&fields=paperId,title,authors,year,externalIds,venue,abstract`;
         if (filters.year) {
           semanticUrl += `&year=${filters.year}`;
         }
@@ -239,6 +240,31 @@ export default function createServer() {
     return results;
   }
 
+  function reconstructAbstract(invertedIndex: Record<string, number[]>): string {
+    const words: [string, number][] = [];
+    for (const [word, positions] of Object.entries(invertedIndex)) {
+      for (const pos of positions) {
+        words.push([word, pos]);
+      }
+    }
+    words.sort((a, b) => a[1] - b[1]);
+    return words.map(w => w[0]).join(' ');
+  }
+
+  function formatAPA(paper: NormalizedPaper): string {
+    const authors = paper.authors?.length
+      ? paper.authors.length > 7
+        ? paper.authors.slice(0, 6).join(', ') + ', ... ' + paper.authors[paper.authors.length - 1]
+        : paper.authors.join(', ')
+      : 'Unknown';
+    const year = paper.year ? `(${paper.year})` : '(n.d.)';
+    const title = paper.title || 'Untitled';
+    const journal = paper.journal ? `*${paper.journal}*` : '';
+    const doi = paper.doi ? `https://doi.org/${paper.doi}` : '';
+
+    return `${authors} ${year}. ${title}. ${journal}${journal && doi ? '. ' : ''}${doi}`.trim();
+  }
+
   async function normalizeResult(result: any, source: string, doiMap?: Map<string, string>): Promise<NormalizedPaper | null> {
     if (!result) return null;
     
@@ -251,6 +277,7 @@ export default function createServer() {
           year: result.published?.['date-parts']?.[0]?.[0],
           doi: result.DOI,
           journal: result['container-title']?.[0],
+          abstract: result.abstract?.replace(/<[^>]*>/g, ''),
         };
       
       case 'openalex':
@@ -261,6 +288,7 @@ export default function createServer() {
           year: result.publication_year,
           doi: result.doi?.replace('https://doi.org/', ''),
           journal: result.primary_location?.source?.display_name,
+          abstract: result.abstract_inverted_index ? reconstructAbstract(result.abstract_inverted_index) : undefined,
         };
       
       case 'pubmed':
@@ -304,6 +332,7 @@ export default function createServer() {
           year: result.publicationDateY_i,
           doi: result.doiId_s,
           journal: result.journalTitle_s || result.bookTitle_s,
+          abstract: result.abstract_s?.[0] || result.en_abstract_s?.[0],
         };
 
       case 'inspirehep':
@@ -315,6 +344,7 @@ export default function createServer() {
           year: metadata.publication_info?.[0]?.year ? parseInt(metadata.publication_info[0].year) : metadata.preprint_date ? new Date(metadata.preprint_date).getFullYear() : undefined,
           doi: metadata.dois?.[0]?.value,
           journal: metadata.publication_info?.[0]?.journal_title || metadata.publication_info?.[0]?.conference_record?.titles?.[0]?.title,
+          abstract: metadata.abstracts?.[0]?.value,
         };
 
       case 'semanticscholar':
@@ -325,6 +355,7 @@ export default function createServer() {
           year: result.year,
           doi: result.externalIds?.DOI,
           journal: result.venue,
+          abstract: result.abstract,
         };
 
       case 'dblp':
@@ -407,18 +438,29 @@ export default function createServer() {
 
             if (doiResponse.ok) {
               const metadata = await doiResponse.json();
+              const paper: NormalizedPaper = {
+                source: 'DOI.org',
+                title: metadata.title?.[0],
+                authors: metadata.author?.map((a: any) => `${a.given || ''} ${a.family || ''}`.trim()),
+                year: metadata.published?.["date-parts"]?.[0]?.[0],
+                doi: metadata.DOI,
+                journal: metadata["container-title"]?.[0],
+                abstract: metadata.abstract?.replace(/<[^>]*>/g, ''),
+              };
               return {
                 content: [{
                   type: "text",
                   text: JSON.stringify({
                     verified: true,
                     source: "DOI.org",
-                    doi: metadata.DOI,
-                    doiUrl: `https://doi.org/${metadata.DOI}`,
-                    title: metadata.title?.[0],
-                    authors: metadata.author?.map((a: any) => `${a.given || ''} ${a.family || ''}`.trim()),
-                    year: metadata.published?.["date-parts"]?.[0]?.[0],
-                    journal: metadata["container-title"]?.[0],
+                    doi: paper.doi,
+                    doiUrl: `https://doi.org/${paper.doi}`,
+                    title: paper.title,
+                    authors: paper.authors,
+                    year: paper.year,
+                    journal: paper.journal,
+                    abstract: paper.abstract,
+                    apa: formatAPA(paper),
                     message: "✓ Citation verified via DOI"
                   }, null, 2)
                 }],
@@ -549,6 +591,8 @@ export default function createServer() {
               authors: bestMatch.authors,
               year: bestMatch.year,
               journal: bestMatch.journal,
+              abstract: bestMatch.abstract,
+              apa: formatAPA(bestMatch),
               message: bestScore >= 5 ? "✓ Citation verified with high confidence" : "✓ Citation found (verify details match)"
             }, null, 2)
           }],
@@ -563,6 +607,168 @@ export default function createServer() {
               error: error.message
             }, null, 2)
           }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.registerTool(
+    "batchVerifyCitations",
+    {
+      description: "Verify multiple citations in a single call. More efficient than calling verifyCitation multiple times. Returns verification status for each citation.",
+      inputSchema: {
+        citations: z.array(z.object({
+          id: z.string().optional().describe("Optional identifier to track this citation in results"),
+          title: z.string().optional().describe("Paper title"),
+          authors: z.array(z.string()).optional().describe("Author names"),
+          year: z.number().optional().describe("Publication year"),
+          doi: z.string().optional().describe("DOI if known"),
+          journal: z.string().optional().describe("Journal name"),
+        })).describe("Array of citations to verify"),
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+      }
+    },
+    async ({ citations }: { citations: Array<{ id?: string; title?: string; authors?: string[]; year?: number; doi?: string; journal?: string }> }) => {
+      try {
+        const results = await Promise.all(
+          citations.map(async (citation, index) => {
+            const citationId = citation.id || `citation_${index + 1}`;
+
+            // If DOI provided, try direct lookup first
+            if (citation.doi) {
+              const cleanDoi = citation.doi.replace(/^(https?:\/\/)?(dx\.)?doi\.org\//, "");
+              try {
+                const doiResponse = await fetch(`https://doi.org/api/handles/${cleanDoi}`, {
+                  headers: { Accept: "application/vnd.citationstyles.csl+json" },
+                });
+                if (doiResponse.ok) {
+                  const metadata = await doiResponse.json();
+                  const paper: NormalizedPaper = {
+                    source: 'DOI.org',
+                    title: metadata.title?.[0],
+                    authors: metadata.author?.map((a: any) => `${a.given || ''} ${a.family || ''}`.trim()),
+                    year: metadata.published?.["date-parts"]?.[0]?.[0],
+                    doi: metadata.DOI,
+                    journal: metadata["container-title"]?.[0],
+                    abstract: metadata.abstract?.replace(/<[^>]*>/g, ''),
+                  };
+                  return {
+                    id: citationId,
+                    verified: true,
+                    confidence: "high",
+                    source: "DOI.org",
+                    paper,
+                    apa: formatAPA(paper),
+                  };
+                }
+              } catch (error) {
+                // Continue with search
+              }
+            }
+
+            // Build search query
+            const queryParts: string[] = [];
+            if (citation.title) queryParts.push(citation.title);
+            if (citation.authors?.length) queryParts.push(citation.authors.join(" "));
+            if (citation.journal) queryParts.push(citation.journal);
+
+            if (queryParts.length === 0) {
+              return {
+                id: citationId,
+                verified: false,
+                message: "Insufficient information to verify",
+              };
+            }
+
+            const query = queryParts.join(" ");
+            const searchResults = await searchMultipleSources(query, { year: citation.year });
+
+            // Batch fetch PubMed DOIs
+            const pubmedPmids = searchResults.pubmed?.map((r: any) => r.uid).filter(Boolean) || [];
+            const pubmedDoiMap = await getDOIsFromPubMed(pubmedPmids);
+
+            // Normalize results
+            const normalizationPromises: Promise<NormalizedPaper | null>[] = [];
+            if (searchResults.crossref) normalizationPromises.push(...searchResults.crossref.map((r: any) => normalizeResult(r, 'crossref')));
+            if (searchResults.openalex) normalizationPromises.push(...searchResults.openalex.map((r: any) => normalizeResult(r, 'openalex')));
+            if (searchResults.pubmed) normalizationPromises.push(...searchResults.pubmed.map((r: any) => normalizeResult(r, 'pubmed', pubmedDoiMap)));
+            if (searchResults.zbmath) normalizationPromises.push(...searchResults.zbmath.map((r: any) => normalizeResult(r, 'zbmath')));
+            if (searchResults.eric) normalizationPromises.push(...searchResults.eric.map((r: any) => normalizeResult(r, 'eric')));
+            if (searchResults.hal) normalizationPromises.push(...searchResults.hal.map((r: any) => normalizeResult(r, 'hal')));
+            if (searchResults.inspirehep) normalizationPromises.push(...searchResults.inspirehep.map((r: any) => normalizeResult(r, 'inspirehep')));
+            if (searchResults.semanticscholar) normalizationPromises.push(...searchResults.semanticscholar.map((r: any) => normalizeResult(r, 'semanticscholar')));
+            if (searchResults.dblp) normalizationPromises.push(...searchResults.dblp.map((r: any) => normalizeResult(r, 'dblp')));
+
+            const allResults = (await Promise.all(normalizationPromises)).filter((r): r is NormalizedPaper => r !== null);
+
+            if (allResults.length === 0) {
+              return {
+                id: citationId,
+                verified: false,
+                message: "No matching publications found",
+              };
+            }
+
+            // Find best match
+            let bestMatch: NormalizedPaper | null = null;
+            let bestScore = 0;
+            for (const result of allResults) {
+              const score = calculateMatchScore(result, citation);
+              if (score > bestScore) {
+                bestScore = score;
+                bestMatch = result;
+                if (bestScore >= 8) break;
+              }
+            }
+
+            if (!bestMatch || bestScore < 3) {
+              return {
+                id: citationId,
+                verified: false,
+                message: "Could not confidently verify",
+                possibleMatches: allResults.slice(0, 2).map(r => ({ title: r.title, authors: r.authors, year: r.year })),
+              };
+            }
+
+            return {
+              id: citationId,
+              verified: true,
+              confidence: bestScore >= 5 ? "high" : "medium",
+              source: bestMatch.source,
+              paper: {
+                title: bestMatch.title,
+                authors: bestMatch.authors,
+                year: bestMatch.year,
+                doi: bestMatch.doi,
+                doiUrl: bestMatch.doi ? `https://doi.org/${bestMatch.doi}` : null,
+                journal: bestMatch.journal,
+                abstract: bestMatch.abstract,
+              },
+              apa: formatAPA(bestMatch),
+            };
+          })
+        );
+
+        const verified = results.filter(r => r.verified).length;
+        const failed = results.filter(r => !r.verified).length;
+
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              summary: { total: citations.length, verified, failed },
+              results,
+            }, null, 2)
+          }],
+        };
+      } catch (error: any) {
+        return {
+          content: [{ type: "text", text: JSON.stringify({ error: error.message }, null, 2) }],
           isError: true,
         };
       }
@@ -742,7 +948,7 @@ export default function createServer() {
 
         if (source === 'all' || source === 'semanticscholar') {
           apiPromises.push((async () => {
-            let semanticUrl = `https://api.semanticscholar.org/graph/v1/paper/search?query=${encodeURIComponent(query)}&limit=${limit}&fields=paperId,title,authors,year,externalIds,venue`;
+            let semanticUrl = `https://api.semanticscholar.org/graph/v1/paper/search?query=${encodeURIComponent(query)}&limit=${limit}&fields=paperId,title,authors,year,externalIds,venue,abstract`;
             if (yearFrom && yearTo) {
               semanticUrl += `&year=${yearFrom}-${yearTo}`;
             } else if (yearFrom) {
@@ -832,19 +1038,17 @@ export default function createServer() {
         }
 
         const citations = uniquePapers.slice(0, limit).map((paper, idx) => {
-          const authorList = paper.authors?.slice(0, 3)?.join(", ") || "Unknown authors";
-          const etAl = (paper.authors?.length || 0) > 3 ? " et al." : "";
-
           return {
             index: idx + 1,
             source: paper.source,
             title: paper.title || "No title",
-            authors: authorList + etAl,
+            authors: paper.authors,
             year: paper.year || "Unknown year",
             journal: paper.journal || "Unknown journal",
             doi: paper.doi,
             doiUrl: paper.doi ? `https://doi.org/${paper.doi}` : null,
-            citation: `${authorList}${etAl}. (${paper.year || 'n.d.'}). ${paper.title}. ${paper.journal || 'Unknown journal'}. ${paper.doi ? `https://doi.org/${paper.doi}` : 'No DOI'}`
+            abstract: paper.abstract,
+            apa: formatAPA(paper),
           };
         });
 
