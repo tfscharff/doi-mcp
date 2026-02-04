@@ -418,19 +418,20 @@ export default function createServer() {
           const cleanDoi = doi.replace(/^(https?:\/\/)?(dx\.)?doi\.org\//, "");
           
           try {
-            const doiResponse = await fetch(`https://doi.org/api/handles/${cleanDoi}`, {
+            const doiResponse = await fetch(`https://doi.org/${cleanDoi}`, {
               headers: { Accept: "application/vnd.citationstyles.csl+json" },
+              redirect: "follow",
             });
 
             if (doiResponse.ok) {
               const metadata = await doiResponse.json();
               const paper: NormalizedPaper = {
                 source: 'DOI.org',
-                title: metadata.title?.[0],
+                title: Array.isArray(metadata.title) ? metadata.title[0] : metadata.title,
                 authors: metadata.author?.map((a: any) => `${a.given || ''} ${a.family || ''}`.trim()),
-                year: metadata.published?.["date-parts"]?.[0]?.[0],
+                year: metadata.published?.["date-parts"]?.[0]?.[0] || metadata.issued?.["date-parts"]?.[0]?.[0],
                 doi: metadata.DOI,
-                journal: metadata["container-title"]?.[0],
+                journal: Array.isArray(metadata["container-title"]) ? metadata["container-title"][0] : metadata["container-title"],
                 abstract: metadata.abstract?.replace(/<[^>]*>/g, ''),
               };
               return {
@@ -627,18 +628,18 @@ export default function createServer() {
             if (citation.doi) {
               const cleanDoi = citation.doi.replace(/^(https?:\/\/)?(dx\.)?doi\.org\//, "");
               try {
-                const doiResponse = await fetch(`https://doi.org/api/handles/${cleanDoi}`, {
+                const doiResponse = await fetch(`https://doi.org/${cleanDoi}`, {
                   headers: { Accept: "application/vnd.citationstyles.csl+json" },
                 });
                 if (doiResponse.ok) {
                   const metadata = await doiResponse.json();
                   const paper: NormalizedPaper = {
                     source: 'DOI.org',
-                    title: metadata.title?.[0],
+                    title: Array.isArray(metadata.title) ? metadata.title[0] : metadata.title,
                     authors: metadata.author?.map((a: any) => `${a.given || ''} ${a.family || ''}`.trim()),
-                    year: metadata.published?.["date-parts"]?.[0]?.[0],
+                    year: metadata.published?.["date-parts"]?.[0]?.[0] || metadata.issued?.["date-parts"]?.[0]?.[0],
                     doi: metadata.DOI,
-                    journal: metadata["container-title"]?.[0],
+                    journal: Array.isArray(metadata["container-title"]) ? metadata["container-title"][0] : metadata["container-title"],
                     abstract: metadata.abstract?.replace(/<[^>]*>/g, ''),
                   };
                   return {
