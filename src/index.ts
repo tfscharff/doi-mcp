@@ -13,7 +13,6 @@ interface SearchResults {
   eric: any[] | null;
   hal: any[] | null;
   inspirehep: any[] | null;
-  arxiv: any[] | null;
   errors: string[];
 }
 
@@ -30,7 +29,7 @@ interface NormalizedPaper {
 export default function createServer() {
   const server = new McpServer({
     name: "Multi-Source Citation Verifier",
-    version: "3.4.0",
+    version: "3.3.1",
   });
 
 
@@ -77,7 +76,6 @@ export default function createServer() {
       eric: null,
       hal: null,
       inspirehep: null,
-      arxiv: null,
       errors: []
     };
 
@@ -225,40 +223,6 @@ export default function createServer() {
           return { source: 'dblp', data: data.result?.hits?.hit || [] };
         }
         return { source: 'dblp', data: [] };
-      })(),
-
-      // arXiv search
-      (async () => {
-        try {
-          const arxivUrl = `https://export.arxiv.org/api/query?search_query=all:${encodeURIComponent(query)}&start=0&max_results=3`;
-          const response = await fetch(arxivUrl);
-          if (response.ok) {
-            const xmlText = await response.text();
-            const entries: any[] = [];
-            const entryRegex = /<entry>([\s\S]*?)<\/entry>/g;
-            let match;
-            while ((match = entryRegex.exec(xmlText)) !== null) {
-              const entry = match[1];
-              const id = entry.match(/<id>([^<]+)<\/id>/)?.[1];
-              const title = entry.match(/<title>([^<]+)<\/title>/)?.[1]?.replace(/\s+/g, ' ').trim();
-              const summary = entry.match(/<summary>([^<]+)<\/summary>/)?.[1]?.replace(/\s+/g, ' ').trim();
-              const published = entry.match(/<published>([^<]+)<\/published>/)?.[1];
-              const authors: string[] = [];
-              const authorRegex = /<author>\s*<name>([^<]+)<\/name>/g;
-              let authorMatch;
-              while ((authorMatch = authorRegex.exec(entry)) !== null) {
-                authors.push(authorMatch[1]);
-              }
-              // Extract arXiv ID for DOI
-              const arxivId = id?.match(/arxiv\.org\/abs\/(.+)/)?.[1];
-              entries.push({ id, arxivId, title, summary, published, authors });
-            }
-            return { source: 'arxiv', data: entries };
-          }
-        } catch (error) {
-          // Return empty if API fails
-        }
-        return { source: 'arxiv', data: [] };
       })()
     ]);
 
@@ -268,7 +232,7 @@ export default function createServer() {
         const { source, data } = result.value;
         results[source as keyof Omit<SearchResults, 'errors'>] = data;
       } else {
-        const sources = ['CrossRef', 'OpenAlex', 'PubMed', 'zbMATH', 'ERIC', 'HAL', 'INSPIRE-HEP', 'Semantic Scholar', 'DBLP', 'arXiv'];
+        const sources = ['CrossRef', 'OpenAlex', 'PubMed', 'zbMATH', 'ERIC', 'HAL', 'INSPIRE-HEP', 'Semantic Scholar', 'DBLP'];
         results.errors.push(`${sources[index]} error: ${result.reason?.message || 'Unknown error'}`);
       }
     });
@@ -394,17 +358,6 @@ export default function createServer() {
           journal: result.info?.venue,
         };
 
-      case 'arxiv':
-        return {
-          source: 'arXiv',
-          title: result.title,
-          authors: result.authors,
-          year: result.published ? new Date(result.published).getFullYear() : undefined,
-          doi: result.arxivId ? `10.48550/arXiv.${result.arxivId}` : undefined,
-          journal: 'arXiv preprint',
-          abstract: result.summary,
-        };
-
       default:
         return null;
     }
@@ -445,7 +398,7 @@ export default function createServer() {
   server.registerTool(
     "verifyCitation",
     {
-      description: "CRITICAL: Use this to verify ANY academic citation before mentioning it. Checks multiple databases (CrossRef, OpenAlex, PubMed, zbMATH, ERIC, HAL, INSPIRE-HEP, Semantic Scholar, DBLP, arXiv) if a paper exists. Returns null if not found.",
+      description: "CRITICAL: Use this to verify ANY academic citation before mentioning it. Checks multiple databases (CrossRef, OpenAlex, PubMed, zbMATH, ERIC, HAL, INSPIRE-HEP, Semantic Scholar, DBLP) if a paper exists. Returns null if not found.",
       inputSchema: {
         title: z.string().optional().describe("Paper title (partial matches accepted)"),
         authors: z.array(z.string()).optional().describe("Author names (last names sufficient)"),
@@ -557,9 +510,6 @@ export default function createServer() {
         if (searchResults.dblp) {
           normalizationPromises.push(...searchResults.dblp.map((r: any) => normalizeResult(r, 'dblp')));
         }
-        if (searchResults.arxiv) {
-          normalizationPromises.push(...searchResults.arxiv.map((r: any) => normalizeResult(r, 'arxiv')));
-        }
 
         const allResults = (await Promise.all(normalizationPromises)).filter((r): r is NormalizedPaper => r !== null);
 
@@ -570,7 +520,7 @@ export default function createServer() {
               text: JSON.stringify({
                 verified: false,
                 message: "⚠ No matching publications found in any database - this citation may be incorrect",
-                searchedSources: ['CrossRef', 'OpenAlex', 'PubMed', 'zbMATH', 'ERIC', 'HAL', 'INSPIRE-HEP', 'Semantic Scholar', 'DBLP', 'arXiv'],
+                searchedSources: ['CrossRef', 'OpenAlex', 'PubMed', 'zbMATH', 'ERIC', 'HAL', 'INSPIRE-HEP', 'Semantic Scholar', 'DBLP'],
                 searchedFor: { title, authors, year, journal },
                 errors: searchResults.errors.length > 0 ? searchResults.errors : undefined
               }, null, 2)
@@ -581,27 +531,14 @@ export default function createServer() {
         let bestMatch: NormalizedPaper | null = null;
         let bestScore = 0;
 
-        // Score all results and sort by score, preferring those with DOIs
-        const scoredResults = allResults.map(result => ({
-          result,
-          score: calculateMatchScore(result, { title, authors, year, journal })
-        })).sort((a, b) => {
-          if (b.score !== a.score) return b.score - a.score;
-          // Prefer results with DOI when scores are equal
-          if (a.result.doi && !b.result.doi) return -1;
-          if (b.result.doi && !a.result.doi) return 1;
-          return 0;
-        });
-
-        if (scoredResults.length > 0) {
-          bestMatch = scoredResults[0].result;
-          bestScore = scoredResults[0].score;
-
-          // If best match has no DOI, try to find DOI from another high-scoring match
-          if (!bestMatch.doi && scoredResults.length > 1) {
-            const doiMatch = scoredResults.find(s => s.score >= bestScore - 1 && s.result.doi);
-            if (doiMatch) {
-              bestMatch.doi = doiMatch.result.doi;
+        for (const result of allResults) {
+          const score = calculateMatchScore(result, { title, authors, year, journal });
+          if (score > bestScore) {
+            bestScore = score;
+            bestMatch = result;
+            // Early exit if we have a very high confidence match (title + year + author)
+            if (bestScore >= 8) {
+              break;
             }
           }
         }
@@ -749,7 +686,6 @@ export default function createServer() {
             if (searchResults.inspirehep) normalizationPromises.push(...searchResults.inspirehep.map((r: any) => normalizeResult(r, 'inspirehep')));
             if (searchResults.semanticscholar) normalizationPromises.push(...searchResults.semanticscholar.map((r: any) => normalizeResult(r, 'semanticscholar')));
             if (searchResults.dblp) normalizationPromises.push(...searchResults.dblp.map((r: any) => normalizeResult(r, 'dblp')));
-            if (searchResults.arxiv) normalizationPromises.push(...searchResults.arxiv.map((r: any) => normalizeResult(r, 'arxiv')));
 
             const allResults = (await Promise.all(normalizationPromises)).filter((r): r is NormalizedPaper => r !== null);
 
@@ -761,25 +697,15 @@ export default function createServer() {
               };
             }
 
-            // Find best match, preferring those with DOIs
-            const scoredResults = allResults.map(result => ({
-              result,
-              score: calculateMatchScore(result, citation)
-            })).sort((a, b) => {
-              if (b.score !== a.score) return b.score - a.score;
-              if (a.result.doi && !b.result.doi) return -1;
-              if (b.result.doi && !a.result.doi) return 1;
-              return 0;
-            });
-
+            // Find best match
             let bestMatch: NormalizedPaper | null = null;
             let bestScore = 0;
-            if (scoredResults.length > 0) {
-              bestMatch = scoredResults[0].result;
-              bestScore = scoredResults[0].score;
-              if (!bestMatch.doi && scoredResults.length > 1) {
-                const doiMatch = scoredResults.find(s => s.score >= bestScore - 1 && s.result.doi);
-                if (doiMatch) bestMatch.doi = doiMatch.result.doi;
+            for (const result of allResults) {
+              const score = calculateMatchScore(result, citation);
+              if (score > bestScore) {
+                bestScore = score;
+                bestMatch = result;
+                if (bestScore >= 8) break;
               }
             }
 
@@ -834,13 +760,13 @@ export default function createServer() {
   server.registerTool(
     "findVerifiedPapers",
     {
-      description: "Search multiple academic databases (CrossRef, OpenAlex, PubMed, zbMATH, ERIC, HAL, INSPIRE-HEP, Semantic Scholar, DBLP, arXiv) for papers and return only verified, real citations with DOIs.",
+      description: "Search multiple academic databases (CrossRef, OpenAlex, PubMed, zbMATH, ERIC, HAL, INSPIRE-HEP, Semantic Scholar, DBLP) for papers and return only verified, real citations with DOIs.",
       inputSchema: {
         query: z.string().describe("Search query (topic, keywords, author names)"),
         limit: z.number().min(1).max(20).default(5).describe("Number of results per source"),
         yearFrom: z.number().optional().describe("Minimum publication year"),
         yearTo: z.number().optional().describe("Maximum publication year"),
-        source: z.enum(['all', 'crossref', 'openalex', 'pubmed', 'zbmath', 'eric', 'hal', 'inspirehep', 'semanticscholar', 'dblp', 'arxiv']).default('all').describe("Which source to search"),
+        source: z.enum(['all', 'crossref', 'openalex', 'pubmed', 'zbmath', 'eric', 'hal', 'inspirehep', 'semanticscholar', 'dblp']).default('all').describe("Which source to search"),
       },
       annotations: {
         readOnlyHint: true,
@@ -848,7 +774,7 @@ export default function createServer() {
         idempotentHint: true,
       }
     },
-    async ({ query, limit = 5, yearFrom, yearTo, source = 'all' }: { query: string; limit?: number; yearFrom?: number; yearTo?: number; source?: 'all' | 'crossref' | 'openalex' | 'pubmed' | 'zbmath' | 'eric' | 'hal' | 'inspirehep' | 'semanticscholar' | 'dblp' | 'arxiv' }) => {
+    async ({ query, limit = 5, yearFrom, yearTo, source = 'all' }: { query: string; limit?: number; yearFrom?: number; yearTo?: number; source?: 'all' | 'crossref' | 'openalex' | 'pubmed' | 'zbmath' | 'eric' | 'hal' | 'inspirehep' | 'semanticscholar' | 'dblp' }) => {
       try {
         // Execute all API calls in parallel for maximum speed
         const apiPromises: Promise<{ source: string; items: any[] }>[] = [];
@@ -1045,44 +971,6 @@ export default function createServer() {
           })());
         }
 
-        if (source === 'all' || source === 'arxiv') {
-          apiPromises.push((async () => {
-            try {
-              const arxivUrl = `https://export.arxiv.org/api/query?search_query=all:${encodeURIComponent(query)}&start=0&max_results=${limit}`;
-              const response = await fetch(arxivUrl);
-              if (response.ok) {
-                const xmlText = await response.text();
-                const entries: any[] = [];
-                const entryRegex = /<entry>([\s\S]*?)<\/entry>/g;
-                let match;
-                while ((match = entryRegex.exec(xmlText)) !== null) {
-                  const entry = match[1];
-                  const id = entry.match(/<id>([^<]+)<\/id>/)?.[1];
-                  const title = entry.match(/<title>([\s\S]*?)<\/title>/)?.[1]?.replace(/\s+/g, ' ').trim();
-                  const summary = entry.match(/<summary>([\s\S]*?)<\/summary>/)?.[1]?.replace(/\s+/g, ' ').trim();
-                  const published = entry.match(/<published>([^<]+)<\/published>/)?.[1];
-                  const authors: string[] = [];
-                  const authorRegex = /<author>\s*<name>([^<]+)<\/name>/g;
-                  let authorMatch;
-                  while ((authorMatch = authorRegex.exec(entry)) !== null) {
-                    authors.push(authorMatch[1]);
-                  }
-                  const arxivId = id?.match(/arxiv\.org\/abs\/(.+)/)?.[1];
-                  const year = published ? new Date(published).getFullYear() : null;
-                  // Filter by year
-                  if (yearFrom && year && year < yearFrom) continue;
-                  if (yearTo && year && year > yearTo) continue;
-                  entries.push({ id, arxivId, title, summary, published, authors });
-                }
-                return { source: 'arxiv', items: entries };
-              }
-            } catch (error) {
-              // Return empty if API fails
-            }
-            return { source: 'arxiv', items: [] };
-          })());
-        }
-
         // Wait for all API calls to complete
         const apiResults = await Promise.allSettled(apiPromises);
 
@@ -1236,12 +1124,6 @@ export default function createServer() {
               coverage: "Comprehensive computer science bibliography",
               url: "https://dblp.org",
               types: "Computer science publications (journals and conferences)"
-            },
-            {
-              name: "arXiv",
-              coverage: "2.4+ million preprints",
-              url: "https://arxiv.org",
-              types: "Preprints in physics, mathematics, computer science, and more"
             }
           ],
           note: "All databases are queried in parallel for maximum coverage and reliability"
