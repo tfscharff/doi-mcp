@@ -29,7 +29,7 @@ interface NormalizedPaper {
 export default function createServer() {
   const server = new McpServer({
     name: "Multi-Source Citation Verifier",
-    version: "3.3.0",
+    version: "3.3.1",
   });
 
 
@@ -251,20 +251,6 @@ export default function createServer() {
     return words.map(w => w[0]).join(' ');
   }
 
-  function formatAPA(paper: NormalizedPaper): string {
-    const authors = paper.authors?.length
-      ? paper.authors.length > 7
-        ? paper.authors.slice(0, 6).join(', ') + ', ... ' + paper.authors[paper.authors.length - 1]
-        : paper.authors.join(', ')
-      : 'Unknown';
-    const year = paper.year ? `(${paper.year})` : '(n.d.)';
-    const title = paper.title || 'Untitled';
-    const journal = paper.journal ? `*${paper.journal}*` : '';
-    const doi = paper.doi ? `https://doi.org/${paper.doi}` : '';
-
-    return `${authors} ${year}. ${title}. ${journal}${journal && doi ? '. ' : ''}${doi}`.trim();
-  }
-
   async function normalizeResult(result: any, source: string, doiMap?: Map<string, string>): Promise<NormalizedPaper | null> {
     if (!result) return null;
     
@@ -459,9 +445,8 @@ export default function createServer() {
                     authors: paper.authors,
                     year: paper.year,
                     journal: paper.journal,
-                    abstract: paper.abstract,
-                    apa: formatAPA(paper),
-                    message: "✓ Citation verified via DOI"
+                    abstractFromArticle: paper.abstract,
+                                        message: "✓ Citation verified via DOI"
                   }, null, 2)
                 }],
               };
@@ -591,9 +576,8 @@ export default function createServer() {
               authors: bestMatch.authors,
               year: bestMatch.year,
               journal: bestMatch.journal,
-              abstract: bestMatch.abstract,
-              apa: formatAPA(bestMatch),
-              message: bestScore >= 5 ? "✓ Citation verified with high confidence" : "✓ Citation found (verify details match)"
+              abstractFromArticle: bestMatch.abstract,
+                            message: bestScore >= 5 ? "✓ Citation verified with high confidence" : "✓ Citation found (verify details match)"
             }, null, 2)
           }],
         };
@@ -663,8 +647,7 @@ export default function createServer() {
                     confidence: "high",
                     source: "DOI.org",
                     paper,
-                    apa: formatAPA(paper),
-                  };
+                                      };
                 }
               } catch (error) {
                 // Continue with search
@@ -747,10 +730,9 @@ export default function createServer() {
                 doi: bestMatch.doi,
                 doiUrl: bestMatch.doi ? `https://doi.org/${bestMatch.doi}` : null,
                 journal: bestMatch.journal,
-                abstract: bestMatch.abstract,
+                abstractFromArticle: bestMatch.abstract,
               },
-              apa: formatAPA(bestMatch),
-            };
+                          };
           })
         );
 
@@ -1047,9 +1029,8 @@ export default function createServer() {
             journal: paper.journal || "Unknown journal",
             doi: paper.doi,
             doiUrl: paper.doi ? `https://doi.org/${paper.doi}` : null,
-            abstract: paper.abstract,
-            apa: formatAPA(paper),
-          };
+            abstractFromArticle: paper.abstract,
+                      };
         });
 
         return {
