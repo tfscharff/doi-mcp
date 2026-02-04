@@ -2,7 +2,7 @@
   <img src="icon.png" alt="doi-mcp logo" width="128" height="128">
 </p>
 
-<h1 align="center">doi-mcp</h1>
+<h1 align="center">DOI Citation Verifier MCP Server</h1>
 
 <p align="center">
   <a href="https://github.com/tfscharff/doi-mcp/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
