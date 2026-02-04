@@ -1,3 +1,0 @@
-* linguist-detectable
-*.ts linguist-language=TypeScript
-*.json linguist-vendored
