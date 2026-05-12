@@ -1,7 +1,7 @@
 {
   "name": "doi-mcp",
-  "version": "1.0.0",
-  "description": "MCP server that prevents citation hallucination by verifying academic citations against CrossRef database",
+  "version": "4.0.0",
+  "description": "MCP server that prevents citation hallucination by verifying academic citations against 9 authoritative databases",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
@@ -9,7 +9,10 @@
   },
   "scripts": {
     "build": "tsc",
-    "dev": "tsc --watch"
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "keywords": [
     "mcp",
@@ -29,7 +32,8 @@
   },
   "devDependencies": {
     "@types/node": "^20.12.7",
-    "typescript": "^5.4.5"
+    "typescript": "^5.4.5",
+    "vitest": "^2.0.0"
   },
   "engines": {
     "node": ">=18.0.0"
