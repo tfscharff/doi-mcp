@@ -41,10 +41,12 @@ Large language models sometimes "hallucinate" academic citations - citing papers
 - **Verify Citations**: Check if a paper with specific details actually exists across all databases
 - **Find Verified Papers**: Search for real papers on a topic and get only verified citations
 - **Parallel Processing**: All database queries run simultaneously for maximum speed
-- **Performance Optimized**: Smart caching and early exit strategies for 25-35% faster verification
+- **LRU Caching**: Repeated queries return instantly (5-minute TTL)
+- **Early Exit**: High-confidence matches (score ≥8) return immediately without waiting for all databases
 - **Source Selection**: Search all databases or target specific sources
 - **Citation Formatting**: Returns properly formatted citations with DOIs
 - **Zero Configuration**: All databases work out-of-the-box with no API keys required
+- **Fully Tested**: 41 tests covering scoring, caching, database adapters, and tool integration
 
 ## How It Works
 
@@ -213,7 +215,45 @@ npm run build
 
 # Development with watch mode
 npm run dev
+
+# Run tests
+npm test
+
+# Run tests in watch mode
+npm run test:watch
+
+# Run tests with coverage
+npm run test:coverage
 ```
+
+### Architecture
+
+Version 4.0 uses a modular architecture for maintainability and testability:
+
+```
+src/
+├── index.ts              # Entry point
+├── server.ts             # MCP server setup
+├── types.ts              # Shared interfaces
+├── scoring.ts            # Match scoring algorithm
+├── cache.ts              # LRU cache (5-min TTL)
+├── http.ts               # Fetch utilities
+├── tools/                # Tool handlers
+│   ├── verifyCitation.ts
+│   ├── batchVerifyCitations.ts
+│   └── findVerifiedPapers.ts
+└── databases/            # Database adapters
+    ├── index.ts          # Parallel query orchestrator
+    ├── crossref.ts
+    ├── openalex.ts
+    ├── pubmed.ts
+    └── ... (9 adapters total)
+```
+
+**Adding a new database:**
+1. Create `src/databases/newdb.ts` with `config`, `search()`, and `normalize()`
+2. Import and add to `src/databases/index.ts`
+3. Add tests in `tests/databases/newdb.test.ts`
 
 ## Example Usage
 
