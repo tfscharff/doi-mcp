@@ -1,6 +1,11 @@
 // MCP server setup - tool, resource, and prompt registration
+import { createRequire } from 'node:module';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+// Single source of truth for the version: package.json. `createRequire` reads it at runtime
+// (works in ESM on Node >=18 without JSON import-attribute syntax, which differs across versions).
+// From dist/server.js this resolves to the project-root package.json.
+const { version } = createRequire(import.meta.url)('../package.json');
 import { allDatabases } from './databases/index.js';
 import { verifyCitation } from './tools/verifyCitation.js';
 import { batchVerifyCitations } from './tools/batchVerifyCitations.js';
@@ -8,7 +13,7 @@ import { findVerifiedPapers } from './tools/findVerifiedPapers.js';
 export function createServer() {
     const server = new McpServer({
         name: 'Multi-Source Citation Verifier',
-        version: '4.0.0',
+        version,
     });
     // Register Tools
     server.registerTool('verifyCitation', {
