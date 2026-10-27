@@ -12,7 +12,7 @@ async function verifyByDoi(doi) {
             title: Array.isArray(metadata.title) ? metadata.title[0] : metadata.title,
             authors: metadata.author?.map(a => `${a.given || ''} ${a.family || ''}`.trim()),
             year: metadata.published?.['date-parts']?.[0]?.[0] || metadata.issued?.['date-parts']?.[0]?.[0],
-            doi: metadata.DOI,
+            doi: metadata.DOI || cleanDoi,
             journal: Array.isArray(metadata['container-title']) ? metadata['container-title'][0] : metadata['container-title'],
             abstract: metadata.abstract?.replace(/<[^>]*>/g, ''),
         };
@@ -57,7 +57,7 @@ async function verifySingleCitation(citation) {
         return {
             id: citationId,
             verified: false,
-            message: 'No matching publications found',
+            message: 'No matching publications with a DOI found',
         };
     }
     const { match: bestMatch, score: bestScore } = findBestMatch(searchResults.results, citation);
@@ -83,7 +83,7 @@ async function verifySingleCitation(citation) {
             authors: bestMatch.authors,
             year: bestMatch.year,
             doi: bestMatch.doi,
-            doiUrl: bestMatch.doi ? `https://doi.org/${bestMatch.doi}` : null,
+            doiUrl: `https://doi.org/${bestMatch.doi}`,
             journal: bestMatch.journal,
             abstractFromArticle: bestMatch.abstract,
         },

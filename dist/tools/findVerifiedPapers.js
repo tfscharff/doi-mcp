@@ -34,7 +34,7 @@ export async function findVerifiedPapers(input) {
             year: paper.year || 'Unknown year',
             journal: paper.journal || 'Unknown journal',
             doi: paper.doi,
-            doiUrl: paper.doi ? `https://doi.org/${paper.doi}` : null,
+            doiUrl: `https://doi.org/${paper.doi}`,
             abstractFromArticle: paper.abstract,
         }));
         const result = {

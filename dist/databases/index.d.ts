@@ -14,4 +14,4 @@ export declare const allDatabases: {
     baseUrl: string;
 }[];
 export declare function searchMultipleSources(query: string, options?: SearchOptions): Promise<SearchResults>;
-export declare function deduplicatePapers(papers: NormalizedPaper[]): NormalizedPaper[];
+export declare function deduplicatePapers<T extends NormalizedPaper>(papers: T[]): T[];

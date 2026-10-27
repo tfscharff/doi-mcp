@@ -38,7 +38,7 @@ describe('batchVerifyCitations tool', () => {
           message: {
             items: [
               { title: ['Deep Learning'], published: { 'date-parts': [[2015]] }, DOI: '10.1/dl' },
-              { title: ['Graph Theory Basics'] },
+              { title: ['Graph Theory Basics'], DOI: '10.1/gt' },
             ],
           },
         });
@@ -72,7 +72,7 @@ describe('batchVerifyCitations tool', () => {
       source: 'CrossRef',
       paper: { doi: '10.1/dl', doiUrl: 'https://doi.org/10.1/dl' },
     });
-    expect(byId.medium).toMatchObject({ verified: true, confidence: 'medium', paper: { doiUrl: null } });
+    expect(byId.medium).toMatchObject({ verified: true, confidence: 'medium', paper: { doiUrl: 'https://doi.org/10.1/gt' } });
     expect(byId.weak).toMatchObject({ verified: false, message: 'Could not confidently verify' });
     expect(byId.weak.possibleMatches).toHaveLength(2);
     expect(byId.empty).toMatchObject({ verified: false, message: 'Insufficient information to verify' });
@@ -86,14 +86,14 @@ describe('batchVerifyCitations tool', () => {
       citations: [{ id: 'x', doi: '10.1/missing', title: 'Ghost Paper', authors: ['Nobody'], journal: 'Nowhere' }],
     }));
 
-    expect(parsed.results[0]).toEqual({ id: 'x', verified: false, message: 'No matching publications found' });
+    expect(parsed.results[0]).toEqual({ id: 'x', verified: false, message: 'No matching publications with a DOI found' });
     const crossrefUrl = mockFetch.mock.calls.map(c => c[0]).find((u: string) => u.includes('crossref'));
     expect(decodeURIComponent(crossrefUrl)).toContain('query=Ghost Paper Nobody Nowhere');
   });
 
   it('does not verify a citation whose only match is the year', async () => {
     mockFetch.mockImplementation((url: string) => (url.includes('crossref')
-      ? ok({ message: { items: [{ title: ['Prayer Basket'], published: { 'date-parts': [[2019]] } }] } })
+      ? ok({ message: { items: [{ title: ['Prayer Basket'], published: { 'date-parts': [[2019]] }, DOI: '10.1/pb' }] } })
       : ok({})));
 
     const parsed = parse(await batchVerifyCitations({
@@ -108,5 +108,29 @@ describe('batchVerifyCitations tool', () => {
 
     expect(result.isError).toBe(true);
     expect(parse(result).error).toBeTruthy();
+  });
+});
+
+describe('batchVerifyCitations tool (DOI-only scope)', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  it('does not verify a strong match that has no DOI', async () => {
+    mockFetch.mockImplementation((url: string) => (url.includes('crossref')
+      ? ok({ message: { items: [{ title: ['Real Paper'], published: { 'date-parts': [[2020]] } }] } })
+      : ok({})));
+
+    const parsed = parse(await batchVerifyCitations({ citations: [{ id: 'r', title: 'Real Paper', year: 2020 }] }));
+
+    expect(parsed.results[0]).toEqual({ id: 'r', verified: false, message: 'No matching publications with a DOI found' });
+  });
+
+  it('falls back to the requested DOI when DOI.org metadata omits it', async () => {
+    mockFetch.mockImplementation(() => ok({ title: 'No DOI field' }));
+
+    const parsed = parse(await batchVerifyCitations({ citations: [{ id: 'd', doi: '10.1/requested' }] }));
+
+    expect(parsed.results[0].paper.doi).toBe('10.1/requested');
   });
 });

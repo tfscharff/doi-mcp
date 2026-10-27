@@ -31,7 +31,7 @@ async function verifyByDoi(doi: string): Promise<NormalizedPaper | null> {
       title: Array.isArray(metadata.title) ? metadata.title[0] : metadata.title,
       authors: metadata.author?.map(a => `${a.given || ''} ${a.family || ''}`.trim()),
       year: metadata.published?.['date-parts']?.[0]?.[0] || metadata.issued?.['date-parts']?.[0]?.[0],
-      doi: metadata.DOI,
+      doi: metadata.DOI || cleanDoi,
       journal: Array.isArray(metadata['container-title']) ? metadata['container-title'][0] : metadata['container-title'],
       abstract: metadata.abstract?.replace(/<[^>]*>/g, ''),
     };
@@ -99,7 +99,7 @@ export async function verifyCitation(input: CitationInput): Promise<{
     if (searchResults.results.length === 0) {
       const result = {
         verified: false,
-        message: '⚠ No matching publications found in any database - this citation may be incorrect',
+        message: '⚠ No matching publications with a DOI found in any database - this citation may be incorrect',
         searchedSources: searchResults.sources,
         searchedFor: { title, authors, year, journal },
         errors: searchResults.errors.length > 0 ? searchResults.errors : undefined,
@@ -119,7 +119,7 @@ export async function verifyCitation(input: CitationInput): Promise<{
           authors: r.authors,
           year: r.year,
           doi: r.doi,
-          doiUrl: r.doi ? `https://doi.org/${r.doi}` : null,
+          doiUrl: `https://doi.org/${r.doi}`,
         })),
       };
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
@@ -130,7 +130,7 @@ export async function verifyCitation(input: CitationInput): Promise<{
       confidence: bestScore >= HIGH_CONFIDENCE_THRESHOLD ? 'high' : 'medium',
       source: bestMatch.source,
       doi: bestMatch.doi,
-      doiUrl: bestMatch.doi ? `https://doi.org/${bestMatch.doi}` : null,
+      doiUrl: `https://doi.org/${bestMatch.doi}`,
       title: bestMatch.title,
       authors: bestMatch.authors,
       year: bestMatch.year,

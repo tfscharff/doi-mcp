@@ -7,13 +7,16 @@ export interface NormalizedPaper {
     journal?: string;
     abstract?: string;
 }
+export type DoiPaper = NormalizedPaper & {
+    doi: string;
+};
 export interface DatabaseError {
     database: string;
     code: 'TIMEOUT' | 'PARSE_ERROR' | 'API_ERROR' | 'NETWORK' | 'ABORTED';
     message: string;
 }
 export interface SearchResults {
-    results: NormalizedPaper[];
+    results: DoiPaper[];
     errors: DatabaseError[];
     sources: string[];
 }

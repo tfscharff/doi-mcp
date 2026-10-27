@@ -51,11 +51,11 @@ export function hasIdentityMatch(result: NormalizedPaper, filters: CitationInput
   return titleMatches(result, filters) || countAuthorMatches(result, filters) > 0;
 }
 
-export function findBestMatch(
-  papers: NormalizedPaper[],
+export function findBestMatch<T extends NormalizedPaper>(
+  papers: T[],
   filters: CitationInput
-): { match: NormalizedPaper | null; score: number } {
-  let bestMatch: NormalizedPaper | null = null;
+): { match: T | null; score: number } {
+  let bestMatch: T | null = null;
   let bestScore = 0;
 
   for (const paper of papers) {

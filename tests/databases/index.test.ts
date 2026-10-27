@@ -39,7 +39,7 @@ describe('searchMultipleSources', () => {
   });
 
   it('restricts queries to the requested sources', async () => {
-    mockFetch.mockImplementation(() => ok({ message: { items: [{ title: ['Only CrossRef'] }] } }));
+    mockFetch.mockImplementation(() => ok({ message: { items: [{ title: ['Only CrossRef'], DOI: '10.1/only' }] } }));
 
     const { results, sources } = await searchMultipleSources('test', { sources: ['crossref'] });
 
@@ -60,7 +60,7 @@ describe('searchMultipleSources', () => {
 
   it('collects per-database errors without failing the whole search', async () => {
     mockFetch.mockImplementation((url: string) => {
-      if (url.includes('crossref')) return ok({ message: { items: [{ title: ['Good'] }] } });
+      if (url.includes('crossref')) return ok({ message: { items: [{ title: ['Good'], DOI: '10.1/good' }] } });
       if (url.includes('openalex')) return Promise.resolve({ ok: false, status: 500, statusText: 'Server Error' });
       return empty();
     });
@@ -122,5 +122,23 @@ describe('deduplicatePapers', () => {
 
   it('drops papers with neither DOI nor title', () => {
     expect(deduplicatePapers([{ source: 'A' }])).toEqual([]);
+  });
+});
+
+describe('searchMultipleSources (DOI-only scope)', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  it('drops results that have no DOI', async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes('crossref')) return ok({ message: { items: [{ title: ['Has DOI'], DOI: '10.1/yes' }, { title: ['No DOI'] }] } });
+      if (url.includes('dblp')) return ok({ result: { hits: { hit: [{ info: { title: 'DBLP no DOI' } }] } } });
+      return empty();
+    });
+
+    const { results } = await searchMultipleSources('test', { sources: ['crossref', 'dblp'] });
+
+    expect(results.map(r => r.title)).toEqual(['Has DOI']);
   });
 });

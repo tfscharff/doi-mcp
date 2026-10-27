@@ -23,7 +23,7 @@ export function createServer() {
   server.registerTool(
     'verifyCitation',
     {
-      description: 'CRITICAL: Use this to verify ANY academic citation before mentioning it. Checks multiple databases (CrossRef, OpenAlex, PubMed, zbMATH, ERIC, HAL, INSPIRE-HEP, Semantic Scholar, DBLP) if a paper exists. Returns null if not found.',
+      description: 'CRITICAL: Use this to verify ANY academic citation before mentioning it. Checks multiple databases (CrossRef, OpenAlex, PubMed, zbMATH, ERIC, HAL, INSPIRE-HEP, Semantic Scholar, DBLP) if a paper exists. Only papers with a DOI count as verified; every verified result includes a doiUrl.',
       inputSchema: {
         title: z.string().optional().describe('Paper title (partial matches accepted)'),
         authors: z.array(z.string()).optional().describe('Author names (last names sufficient)'),

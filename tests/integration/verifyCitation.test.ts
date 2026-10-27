@@ -70,13 +70,13 @@ describe('verifyCitation tool (scoring paths)', () => {
   });
 
   it('reports medium confidence for a title-only match', async () => {
-    mockCrossRefOnly([{ title: ['Deep Learning'] }]);
+    mockCrossRefOnly([{ title: ['Deep Learning'], DOI: '10.1/dl' }]);
 
     const parsed = parse(await verifyCitation({ title: 'Deep Learning' }));
 
     expect(parsed.verified).toBe(true);
     expect(parsed.confidence).toBe('medium');
-    expect(parsed.doiUrl).toBeNull();
+    expect(parsed.doiUrl).toBe('https://doi.org/10.1/dl');
     expect(parsed.message).toContain('verify details match');
   });
 
@@ -130,5 +130,51 @@ describe('verifyCitation tool (scoring paths)', () => {
     await verifyCitation({ title: 'Missing' });
 
     expect(cache.size()).toBe(0);
+  });
+});
+
+describe('verifyCitation tool (DOI-only scope)', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    cache.clear();
+  });
+
+  it('does not verify a strong match that has no DOI', async () => {
+    mockCrossRefOnly([{ title: ['Attention Is All You Need'], published: { 'date-parts': [[2017]] } }]);
+
+    const parsed = parse(await verifyCitation({ title: 'Attention Is All You Need', year: 2017 }));
+
+    expect(parsed.verified).toBe(false);
+    expect(parsed.message).toContain('No matching publications with a DOI');
+  });
+
+  it('picks the DOI-bearing record when a no-DOI record would score higher', async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url.startsWith('https://doi.org/')) return notFound();
+      if (url.includes('crossref')) return ok({ message: { items: [{ title: ['Attention Is All You Need'], DOI: '10.48550/arxiv.1706.03762' }] } });
+      if (url.includes('inspirehep')) {
+        return ok({ hits: { hits: [{ metadata: {
+          titles: [{ title: 'Attention Is All You Need' }],
+          authors: [{ full_name: 'Vaswani, Ashish' }],
+          publication_info: [{ year: '2017' }],
+        } }] } });
+      }
+      return ok({});
+    });
+
+    const parsed = parse(await verifyCitation({ title: 'Attention Is All You Need', authors: ['Vaswani'], year: 2017 }));
+
+    expect(parsed.verified).toBe(true);
+    expect(parsed.source).toBe('CrossRef');
+    expect(parsed.doiUrl).toBe('https://doi.org/10.48550/arxiv.1706.03762');
+  });
+
+  it('falls back to the requested DOI when DOI.org metadata omits it', async () => {
+    mockFetch.mockImplementation(() => ok({ title: 'No DOI field' }));
+
+    const parsed = parse(await verifyCitation({ doi: '10.1/requested' }));
+
+    expect(parsed.doi).toBe('10.1/requested');
+    expect(parsed.doiUrl).toBe('https://doi.org/10.1/requested');
   });
 });

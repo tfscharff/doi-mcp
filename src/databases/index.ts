@@ -1,6 +1,6 @@
 // Database orchestrator - parallel query execution across all sources
 
-import type { NormalizedPaper, DatabaseError, SearchResults } from '../types.js';
+import type { NormalizedPaper, DoiPaper, DatabaseError, SearchResults } from '../types.js';
 import * as crossref from './crossref.js';
 import * as openalex from './openalex.js';
 import * as pubmed from './pubmed.js';
@@ -52,7 +52,7 @@ export async function searchMultipleSources(
     ? (Object.entries(adapters).filter(([name]) => sources.includes(name)) as [AdapterName, typeof adapters[AdapterName]][])
     : (Object.entries(adapters) as [AdapterName, typeof adapters[AdapterName]][]);
 
-  const results: NormalizedPaper[] = [];
+  const results: DoiPaper[] = [];
   const errors: DatabaseError[] = [];
   const sourcesQueried: string[] = [];
 
@@ -85,16 +85,17 @@ export async function searchMultipleSources(
 
   const allResults = await Promise.all(searchPromises);
 
+  // Drop anything without a DOI: this server only returns DOI-backed citations
   for (const papers of allResults) {
-    results.push(...papers.filter((p): p is NormalizedPaper => p !== null));
+    results.push(...papers.filter((p): p is DoiPaper => !!p?.doi));
   }
 
   return { results, errors, sources: sourcesQueried };
 }
 
-export function deduplicatePapers(papers: NormalizedPaper[]): NormalizedPaper[] {
+export function deduplicatePapers<T extends NormalizedPaper>(papers: T[]): T[] {
   const seen = new Set<string>();
-  const unique: NormalizedPaper[] = [];
+  const unique: T[] = [];
 
   for (const paper of papers) {
     const key = paper.doi || paper.title?.toLowerCase();

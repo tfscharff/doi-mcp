@@ -44,7 +44,7 @@ describe('findVerifiedPapers tool (options and formatting)', () => {
   });
 
   it('fills in placeholders for missing fields', async () => {
-    mockFetch.mockImplementation(() => ok({ message: { items: [{ title: ['Bare'] }] } }));
+    mockFetch.mockImplementation(() => ok({ message: { items: [{ title: ['Bare'], DOI: '10.1/bare' }] } }));
 
     const parsed = parse(await findVerifiedPapers({ query: 'q', source: 'crossref' }));
 
@@ -52,7 +52,6 @@ describe('findVerifiedPapers tool (options and formatting)', () => {
       title: 'Bare',
       year: 'Unknown year',
       journal: 'Unknown journal',
-      doiUrl: null,
     });
   });
 
@@ -64,5 +63,21 @@ describe('findVerifiedPapers tool (options and formatting)', () => {
 
     expect(mockFetch).toHaveBeenCalledTimes(1);
     expect(second).toEqual(first);
+  });
+});
+
+describe('findVerifiedPapers tool (DOI-only scope)', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    cache.clear();
+  });
+
+  it('returns only papers that have a DOI, each with a doiUrl', async () => {
+    mockFetch.mockImplementation(() => ok({ message: { items: [{ title: ['With'], DOI: '10.1/w' }, { title: ['Without'] }] } }));
+
+    const parsed = parse(await findVerifiedPapers({ query: 'q', source: 'crossref' }));
+
+    expect(parsed.papers.map((p: any) => p.title)).toEqual(['With']);
+    expect(parsed.papers[0].doiUrl).toBe('https://doi.org/10.1/w');
   });
 });

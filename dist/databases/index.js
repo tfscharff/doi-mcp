@@ -59,8 +59,9 @@ export async function searchMultipleSources(query, options = {}) {
         }
     });
     const allResults = await Promise.all(searchPromises);
+    // Drop anything without a DOI: this server only returns DOI-backed citations
     for (const papers of allResults) {
-        results.push(...papers.filter((p) => p !== null));
+        results.push(...papers.filter((p) => !!p?.doi));
     }
     return { results, errors, sources: sourcesQueried };
 }

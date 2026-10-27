@@ -10,6 +10,9 @@ export interface NormalizedPaper {
   abstract?: string;
 }
 
+// Project scope: only papers with a DOI can be returned or verified
+export type DoiPaper = NormalizedPaper & { doi: string };
+
 export interface DatabaseError {
   database: string;
   code: 'TIMEOUT' | 'PARSE_ERROR' | 'API_ERROR' | 'NETWORK' | 'ABORTED';
@@ -17,7 +20,7 @@ export interface DatabaseError {
 }
 
 export interface SearchResults {
-  results: NormalizedPaper[];
+  results: DoiPaper[];
   errors: DatabaseError[];
   sources: string[];
 }
