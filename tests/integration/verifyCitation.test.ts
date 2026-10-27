@@ -1,0 +1,121 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { verifyCitation } from '../../src/tools/verifyCitation.js';
+import * as cache from '../../src/cache.js';
+
+const mockFetch = vi.fn();
+global.fetch = mockFetch;
+
+const ok = (body: unknown) => Promise.resolve({ ok: true, json: () => Promise.resolve(body) });
+const notFound = () => Promise.resolve({ ok: false, status: 404, statusText: 'Not Found' });
+
+// CrossRef returns the given items; doi.org 404s; every other database is empty
+function mockCrossRefOnly(items: any[]) {
+  mockFetch.mockImplementation((url: string) => {
+    if (url.startsWith('https://doi.org/')) return notFound();
+    if (url.includes('crossref')) return ok({ message: { items } });
+    return ok({});
+  });
+}
+
+const parse = (result: { content: Array<{ text: string }> }) => JSON.parse(result.content[0].text);
+
+describe('verifyCitation tool (scoring paths)', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    cache.clear();
+  });
+
+  it('normalizes DOI.org CSL-JSON metadata', async () => {
+    mockFetch.mockImplementation(() => ok({
+      title: ['Array Title'],
+      author: [{ family: 'Solo' }],
+      issued: { 'date-parts': [[2001]] },
+      DOI: '10.1/x',
+      'container-title': ['Journal A'],
+      abstract: '<jats:p>Plain</jats:p>',
+    }));
+
+    const parsed = parse(await verifyCitation({ doi: 'https://dx.doi.org/10.1/x' }));
+
+    expect(mockFetch.mock.calls[0][0]).toBe('https://doi.org/10.1/x');
+    expect(parsed).toMatchObject({
+      verified: true,
+      title: 'Array Title',
+      authors: ['Solo'],
+      year: 2001,
+      journal: 'Journal A',
+      abstractFromArticle: 'Plain',
+      doiUrl: 'https://doi.org/10.1/x',
+    });
+  });
+
+  it('falls back to database search when DOI lookup fails', async () => {
+    mockCrossRefOnly([{ title: ['Deep Learning'], published: { 'date-parts': [[2015]] }, DOI: '10.1/dl' }]);
+
+    const parsed = parse(await verifyCitation({ doi: '10.1/bad', title: 'Deep Learning', year: 2015 }));
+
+    expect(parsed.verified).toBe(true);
+    expect(parsed.source).toBe('CrossRef');
+    expect(parsed.doi).toBe('10.1/dl');
+  });
+
+  it('reports high confidence when score reaches the high-confidence threshold', async () => {
+    mockCrossRefOnly([{ title: ['Deep Learning'], published: { 'date-parts': [[2015]] }, DOI: '10.1/dl' }]);
+
+    const parsed = parse(await verifyCitation({ title: 'Deep Learning', year: 2015 }));
+
+    expect(parsed.confidence).toBe('high');
+    expect(parsed.message).toContain('high confidence');
+    expect(parsed.doiUrl).toBe('https://doi.org/10.1/dl');
+  });
+
+  it('reports medium confidence for a title-only match', async () => {
+    mockCrossRefOnly([{ title: ['Deep Learning'] }]);
+
+    const parsed = parse(await verifyCitation({ title: 'Deep Learning' }));
+
+    expect(parsed.verified).toBe(true);
+    expect(parsed.confidence).toBe('medium');
+    expect(parsed.doiUrl).toBeNull();
+    expect(parsed.message).toContain('verify details match');
+  });
+
+  it('returns possible matches when the best score is below the match threshold', async () => {
+    mockCrossRefOnly([{ title: ['Something Else Entirely'], DOI: '10.1/other' }]);
+
+    const parsed = parse(await verifyCitation({ title: 'Deep Learning', authors: ['Nobody'] }));
+
+    expect(parsed.verified).toBe(false);
+    expect(parsed.message).toContain('Could not confidently verify');
+    expect(parsed.possibleMatches).toEqual([
+      expect.objectContaining({ title: 'Something Else Entirely', doiUrl: 'https://doi.org/10.1/other' }),
+    ]);
+  });
+
+  it('builds the search query from title, authors and journal', async () => {
+    mockCrossRefOnly([]);
+
+    await verifyCitation({ title: 'T', authors: ['A One', 'B Two'], journal: 'J' });
+
+    const crossrefUrl = mockFetch.mock.calls.map(c => c[0]).find((u: string) => u.includes('crossref'));
+    expect(decodeURIComponent(crossrefUrl)).toContain('query=T A One B Two J');
+  });
+
+  it('includes database errors when nothing is found', async () => {
+    mockFetch.mockImplementation(notFound);
+
+    const parsed = parse(await verifyCitation({ title: 'Anything' }));
+
+    expect(parsed.verified).toBe(false);
+    expect(parsed.errors.length).toBeGreaterThan(0);
+    expect(parsed.searchedSources).toHaveLength(9);
+  });
+
+  it('does not cache unverified results', async () => {
+    mockCrossRefOnly([]);
+
+    await verifyCitation({ title: 'Missing' });
+
+    expect(cache.size()).toBe(0);
+  });
+});

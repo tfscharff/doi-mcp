@@ -46,7 +46,7 @@ Large language models sometimes "hallucinate" academic citations - citing papers
 - **Source Selection**: Search all databases or target specific sources
 - **Citation Formatting**: Returns properly formatted citations with DOIs
 - **Zero Configuration**: All databases work out-of-the-box with no API keys required
-- **Fully Tested**: 41 tests covering scoring, caching, database adapters, and tool integration
+- **Fully Tested**: 174 tests with 100% line coverage across scoring, caching, HTTP, all 9 database adapters, the tools, and the MCP server itself
 
 ## How It Works
 

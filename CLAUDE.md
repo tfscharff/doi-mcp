@@ -56,4 +56,8 @@ The early exit only short-circuits `findBestMatch`'s loop over already-fetched r
 
 ## Testing
 
-Vitest with `globals: true`; tests in `tests/**/*.test.ts` (`unit/`, `databases/`, `integration/`). Tests mock `global.fetch` with `vi.fn()` — no live API calls. Only CrossRef and PubMed currently have adapter tests.
+Vitest with `globals: true`; tests in `tests/**/*.test.ts` (`unit/`, `databases/`, `integration/`). Tests mock `global.fetch` with `vi.fn()` — no live API calls. Coverage is 100% of lines; keep it there.
+
+- `tests/integration/server.test.ts` drives `createServer()` through a real MCP `Client` over `InMemoryTransport`, so it exercises Zod validation, defaults, resources, and the prompt.
+- `tests/integration/toolErrors.test.ts` uses `vi.mock` on `databases/index.js` to force the tools' outer catch blocks; `entry.test.ts` mocks the stdio transport to test `index.ts`.
+- Simulate an aborted request with `mockFetch.mockRejectedValue(Object.assign(new Error(), { name: 'AbortError' }))`.

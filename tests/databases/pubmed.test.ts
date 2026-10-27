@@ -143,3 +143,54 @@ describe('pubmed adapter', () => {
     });
   });
 });
+
+describe('pubmed adapter (filters and failures)', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  const emptySearch = () => mockFetch.mockResolvedValue({
+    ok: true,
+    json: () => Promise.resolve({ esearchresult: { idlist: [] } }),
+  });
+
+  it.each([
+    [{ year: 2020 }, 'AND 2020:2020[dp]'],
+    [{ yearFrom: 2015, yearTo: 2020 }, 'AND 2015:2020[dp]'],
+    [{ yearFrom: 2015 }, `AND 2015:${new Date().getFullYear()}[dp]`],
+    [{ yearTo: 2020 }, 'AND 1900:2020[dp]'],
+  ])('applies date filter %o', async (options, expected) => {
+    emptySearch();
+
+    await search('test', options);
+
+    expect(decodeURIComponent(mockFetch.mock.calls[0][0])).toContain(expected);
+  });
+
+  it('throws API_ERROR on HTTP failure', async () => {
+    mockFetch.mockResolvedValue({ ok: false, status: 500, statusText: 'Internal Server Error' });
+
+    await expect(search('test')).rejects.toMatchObject({ code: 'API_ERROR', database: 'PubMed' });
+  });
+
+  it('throws ABORTED when the request is aborted', async () => {
+    mockFetch.mockRejectedValue(Object.assign(new Error('aborted'), { name: 'AbortError' }));
+
+    await expect(search('test')).rejects.toMatchObject({ code: 'ABORTED' });
+  });
+
+  it('returns an empty DOI map when efetch fails', async () => {
+    mockFetch.mockResolvedValue({ ok: false, status: 500, statusText: 'Internal Server Error' });
+
+    expect((await getDOIsFromPubMed(['1'])).size).toBe(0);
+  });
+
+  it('stops parsing at a truncated article', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      text: () => Promise.resolve('<PubmedArticle><PMID>1</PMID><ArticleId IdType="doi">10.1/x</ArticleId>'),
+    });
+
+    expect((await getDOIsFromPubMed(['1'])).size).toBe(0);
+  });
+});

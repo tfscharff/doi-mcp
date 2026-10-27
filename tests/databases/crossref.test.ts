@@ -106,3 +106,11 @@ describe('crossref adapter', () => {
     });
   });
 });
+
+describe('crossref adapter (abort)', () => {
+  it('throws ABORTED when the request is aborted', async () => {
+    mockFetch.mockRejectedValue(Object.assign(new Error('aborted'), { name: 'AbortError' }));
+
+    await expect(search('test')).rejects.toMatchObject({ code: 'ABORTED' });
+  });
+});
