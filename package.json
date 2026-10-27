@@ -28,13 +28,13 @@
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",
-    "zod": "^3.25.0"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@types/node": "^20.12.7",
-    "@vitest/coverage-v8": "^2.1.9",
+    "@types/node": "^22.20.5",
+    "@vitest/coverage-v8": "^5.0.5",
     "typescript": "^5.4.5",
-    "vitest": "^2.1.9"
+    "vitest": "^5.0.5"
   },
   "engines": {
     "node": ">=18.0.0"

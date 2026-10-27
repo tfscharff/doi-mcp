@@ -6,7 +6,8 @@ const { connect, transport } = vi.hoisted(() => ({
 }));
 
 vi.mock('@modelcontextprotocol/sdk/server/stdio.js', () => ({
-  StdioServerTransport: vi.fn(() => transport),
+  // Called with `new`, so the mock must be a function, not an arrow
+  StdioServerTransport: vi.fn(function () { return transport; }),
 }));
 vi.mock('../../src/server.js', () => ({
   createServer: vi.fn(() => ({ connect })),

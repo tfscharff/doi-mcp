@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-MCP server (stdio) that prevents citation hallucination by verifying academic citations against 9 databases: CrossRef, OpenAlex, PubMed, zbMATH, ERIC, HAL, INSPIRE-HEP, Semantic Scholar, DBLP. ESM TypeScript, Node >=18, Zod for tool input schemas.
+MCP server (stdio) that prevents citation hallucination by verifying academic citations against 9 databases: CrossRef, OpenAlex, PubMed, zbMATH, ERIC, HAL, INSPIRE-HEP, Semantic Scholar, DBLP. ESM TypeScript, Zod 4 for tool input schemas. Runtime supports Node >=18, but development needs Node >=22.12 (vitest 5).
 
 ## Commands
 
@@ -60,4 +60,5 @@ Vitest with `globals: true`; tests in `tests/**/*.test.ts` (`unit/`, `databases/
 
 - `tests/integration/server.test.ts` drives `createServer()` through a real MCP `Client` over `InMemoryTransport`, so it exercises Zod validation, defaults, resources, and the prompt.
 - `tests/integration/toolErrors.test.ts` uses `vi.mock` on `databases/index.js` to force the tools' outer catch blocks; `entry.test.ts` mocks the stdio transport to test `index.ts`.
+- A `vi.fn()` that the code calls with `new` must use a `function`, not an arrow function (vitest 4+).
 - Simulate an aborted request with `mockFetch.mockRejectedValue(Object.assign(new Error(), { name: 'AbortError' }))`.

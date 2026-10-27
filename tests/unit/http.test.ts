@@ -72,6 +72,17 @@ describe('http', () => {
 
       await expect(fetchText('https://example.org')).rejects.toThrow('HTTP 500: Server Error');
     });
+
+    it('aborts after the timeout', async () => {
+      vi.useFakeTimers();
+      mockFetch.mockImplementation(hangUntilAborted);
+
+      const promise = fetchText('https://example.org', { timeout: 50 });
+      const assertion = expect(promise).rejects.toMatchObject({ name: 'AbortError' });
+      await vi.advanceTimersByTimeAsync(50);
+
+      await assertion;
+    });
   });
 
   describe('fetchWithRedirect', () => {
@@ -98,6 +109,17 @@ describe('http', () => {
       mockFetch.mockResolvedValue({ ok: false, status: 404, statusText: 'Not Found' });
 
       await expect(fetchWithRedirect('https://doi.org/bad')).rejects.toThrow('HTTP 404: Not Found');
+    });
+
+    it('aborts after the timeout', async () => {
+      vi.useFakeTimers();
+      mockFetch.mockImplementation(hangUntilAborted);
+
+      const promise = fetchWithRedirect('https://doi.org/slow', { timeout: 50 });
+      const assertion = expect(promise).rejects.toMatchObject({ name: 'AbortError' });
+      await vi.advanceTimersByTimeAsync(50);
+
+      await assertion;
     });
   });
 });
