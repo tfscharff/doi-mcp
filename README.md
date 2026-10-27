@@ -5,7 +5,7 @@
 <h1 align="center">DOI Citation Verifier MCP Server</h1>
 
 <p align="center">
-  A Model Context Protocol (MCP) server that <strong>prevents citation hallucination</strong> by verifying academic citations against <strong>9 authoritative databases</strong>. This server enables AI assistants to verify every citation against real publications before citing them.
+  A Model Context Protocol (MCP) server that <strong>prevents citation hallucination</strong> by verifying academic citations against <strong>9 authoritative databases</strong>. Only papers with a DOI are ever verified or returned, so every citation it gives an AI assistant comes with a working <code>https://doi.org/</code> link.
 </p>
 
 ## 🚀 Quick Install
@@ -26,27 +26,28 @@ Or add to your Claude Desktop config:
 }
 ```
 
+To pin a release, append its tag: `github:tfscharff/doi-mcp#v5.0.0`. See [Releases](#releases).
+
 ## The Problem This Solves
 
 Large language models sometimes "hallucinate" academic citations - citing papers that don't exist, misattributing real titles to wrong authors, or mixing up publication details. This MCP server eliminates that problem by:
 
 1. **9-database verification**: Checks citations across CrossRef, OpenAlex, PubMed, zbMATH, ERIC, HAL, INSPIRE-HEP, Semantic Scholar, and DBLP
-2. **Parallel search**: Queries all databases simultaneously for fast results (~1 second)
+2. **Parallel search**: Queries all databases simultaneously
 3. **Comprehensive coverage**: 600+ million publications across all disciplines including STEM, humanities, social sciences, and education
-4. **DOI-backed citations**: Every verified citation includes a valid, clickable DOI
+4. **DOI-only results**: A paper counts only if a database returns a DOI for it. Every verified citation, possible match, and search result includes a DOI.
 
 ## Features
 
 - **9 Database Search**: CrossRef, OpenAlex, PubMed, zbMATH, ERIC, HAL, INSPIRE-HEP, Semantic Scholar, DBLP
-- **Verify Citations**: Check if a paper with specific details actually exists across all databases
-- **Find Verified Papers**: Search for real papers on a topic and get only verified citations
-- **Parallel Processing**: All database queries run simultaneously for maximum speed
-- **LRU Caching**: Repeated queries return instantly (5-minute TTL)
-- **Early Exit**: Scoring stops at the first candidate scoring ≥8 instead of scoring every result
+- **Verify Citations**: Check if a paper with specific details actually exists, one at a time or in batches
+- **Find Verified Papers**: Search for real papers on a topic and get only DOI-backed results
+- **Strict matching**: A candidate must match the citation's title or an author; a matching year alone never verifies anything
+- **Parallel Processing**: All database queries run simultaneously
+- **Caching**: Repeated successful queries return instantly (5-minute TTL, 100 entries)
 - **Source Selection**: Search all databases or target specific sources
-- **Citation Formatting**: Returns properly formatted citations with DOIs
 - **Zero Configuration**: All databases work out-of-the-box with no API keys required
-- **Fully Tested**: 176 tests with 100% line coverage across scoring, caching, HTTP, all 9 database adapters, the tools, and the MCP server itself
+- **Fully Tested**: 100% line coverage across scoring, caching, HTTP, all 9 database adapters, the tools, and the MCP server itself
 
 ## How It Works
 
@@ -54,13 +55,35 @@ When an AI assistant is asked about research or for citations:
 
 1. **Without this MCP**: The assistant might cite "According to Smith et al. (2023) in Nature..." referencing a paper that doesn't exist
 2. **With this MCP**: The assistant uses `verifyCitation` first, which searches across 9 databases in parallel and returns:
-   - Verified match with full DOI → Can be cited
-   - No match found → Cannot cite; must search for real papers instead
+   - Verified match with a DOI → Can be cited
+   - No DOI-backed match found → Cannot cite; must search for real papers instead
+
+If a DOI is supplied, it is resolved directly at doi.org first; the database search is the fallback.
+
+### Scoring
+
+Each candidate returned by the databases is scored against the citation:
+
+| Match | Points |
+|---|---|
+| Title contains the first 30 characters of the cited title (case-insensitive) | +3 |
+| Exact year | +3 (±1 year: +1) |
+| Each cited author whose last name appears in the candidate's authors | +2 |
+
+A candidate is only considered if it has a DOI **and** matches on title or at least one author. A score of 3+ verifies the citation; 5+ is reported as high confidence.
+
+### Limitations
+
+- **Papers without a DOI can't be verified.** Some real papers, such as conference proceedings that never received a DOI, will come back `verified: false`. This is deliberate: the server only vouches for citations it can link to.
+- **Speed depends on the slowest database.** Most lookups take one to a few seconds; title/author searches wait for all 9 databases.
+- **Semantic Scholar rate-limits** requests without an API key. When it does, its error is reported in the response and the other 8 databases are still used.
 
 ## Tools
 
+All tools are read-only (`readOnlyHint: true`, `destructiveHint: false`, `idempotentHint: true`).
+
 ### verifyCitation
-**Primary anti-hallucination tool** - Verifies a citation exists across multiple databases before it can be mentioned.
+**Primary anti-hallucination tool** - Verifies a citation exists before it can be mentioned.
 
 **Input:**
 - `title` (string, optional): Paper title (partial matches accepted)
@@ -71,27 +94,35 @@ When an AI assistant is asked about research or for citations:
 
 **Returns JSON with:**
 - `verified`: true/false
-- If verified=true: DOI, title, authors, year, journal, URL, source database
-- If verified=false: Warning message that no matching publication was found
-- Match quality indicators for transparency
+- If verified: `confidence` (`high`/`medium`), `source`, `doi`, `doiUrl`, `title`, `authors`, `year`, `journal`, `abstractFromArticle`, `message`
+- If not verified: a warning `message`, plus `possibleMatches` (each with a DOI) when there were near misses
 
 **Example successful verification:**
 ```json
 {
   "verified": true,
-  "doi": "10.1038/s41586-023-06004-9",
-  "title": "Accurate structure prediction of biomolecular interactions...",
-  "authors": ["John Jumper", "Richard Evans", "..."],
-  "year": 2023,
+  "confidence": "high",
+  "source": "CrossRef",
+  "doi": "10.1038/nature14539",
+  "doiUrl": "https://doi.org/10.1038/nature14539",
+  "title": "Deep learning",
+  "authors": ["Yann LeCun", "Yoshua Bengio", "Geoffrey Hinton"],
+  "year": 2015,
   "journal": "Nature",
-  "url": "https://doi.org/10.1038/s41586-023-06004-9",
-  "source": "crossref",
-  "message": "✓ Citation verified"
+  "message": "✓ Citation verified with high confidence"
 }
 ```
 
+### batchVerifyCitations
+Verify several citations in one call. Each citation takes the same fields as `verifyCitation`, plus an optional `id` to match results back to inputs.
+
+**Input:**
+- `citations` (array): `{ id?, title?, authors?, year?, doi?, journal? }` objects
+
+**Returns:** `summary` (`total`, `verified`, `failed`) and a `results` array, one entry per citation, each with `id`, `verified`, and either `paper` (including `doiUrl`) or a `message`.
+
 ### findVerifiedPapers
-Search for real papers on a topic and return only verified citations with DOIs from multiple databases.
+Search for real papers on a topic and return only papers with DOIs.
 
 **Input:**
 - `query` (string): Search query (topic, keywords, author names)
@@ -100,7 +131,7 @@ Search for real papers on a topic and return only verified citations with DOIs f
 - `yearFrom` (number, optional): Minimum publication year
 - `yearTo` (number, optional): Maximum publication year
 
-**Returns:** Array of verified papers from the specified database(s) with complete citation information including source
+**Returns:** Up to `limit` papers, deduplicated by DOI, each with `source`, `title`, `authors`, `year`, `journal`, `doi`, and `doiUrl`
 
 **Example:**
 ```javascript
@@ -125,6 +156,12 @@ findVerifiedPapers({ query: "phenomenology Husserl", source: "hal" })
 // Search INSPIRE-HEP for high-energy physics papers
 findVerifiedPapers({ query: "Higgs boson", source: "inspirehep" })
 ```
+
+### Resources and prompt
+
+- `citation://databases` (JSON): the 9 databases with coverage and API URLs
+- `citation://guidelines` (Markdown): when and how to use each tool
+- `citation-verification-rules` (prompt): rules that tell the assistant to verify before citing and to cite only with a DOI
 
 ## Installation
 
@@ -204,46 +241,57 @@ npm cache clean --force
 npx @modelcontextprotocol/inspector node dist/index.js
 ```
 
+## Releases
+
+Every change is published as a [GitHub release](https://github.com/tfscharff/doi-mcp/releases) following [Semantic Versioning](https://semver.org/):
+
+- **Major** (5.0.0 → 6.0.0): a change in what gets verified or returned, or in the tools' inputs and outputs
+- **Minor** (5.0.0 → 5.1.0): new features, such as a new database or tool
+- **Patch** (5.0.0 → 5.0.1): fixes, docs, and maintenance
+
+See [CHANGELOG.md](CHANGELOG.md) for what changed in each version.
+
 ## Development
 
+Development requires Node.js 22.12+ (for Vitest 5). The server itself runs on Node 18+.
+
 ```bash
-# Install dependencies
-npm install
-
-# Build
-npm run build
-
-# Development with watch mode
-npm run dev
-
-# Run tests
-npm test
-
-# Run tests in watch mode
-npm run test:watch
-
-# Run tests with coverage
-npm run test:coverage
+npm install            # Install dependencies
+npm run build          # Compile TypeScript to dist/
+npm run dev            # Watch mode
+npm test               # Run tests
+npm run test:watch     # Tests in watch mode
+npm run test:coverage  # Tests with coverage report
 ```
+
+Tests mock all network calls; nothing hits the live APIs.
+
+### Releasing
+
+`dist/` is committed so `npx` can run the server straight from GitHub. Don't commit or tag releases by hand; use:
+
+```bash
+npm run ship -- "fix(pubmed): handle missing PMIDs" --body "Optional details for the release notes."
+```
+
+`scripts/ship.mjs` checks the header is a [Conventional Commit](https://www.conventionalcommits.org/), runs the tests, rebuilds `dist/`, bumps the version (`feat` → minor; `fix`, `docs`, `chore`, etc. → patch; `!` or `BREAKING CHANGE:` → major), adds a `CHANGELOG.md` entry, then commits, tags `vX.Y.Z`, pushes, and creates the GitHub release. Use `--dry-run` to preview, or `--as X.Y.Z` to force a version. It only runs on `main` with uncommitted changes.
 
 ### Architecture
 
-Version 4.0 uses a modular architecture for maintainability and testability:
-
 ```
 src/
-├── index.ts              # Entry point
-├── server.ts             # MCP server setup
+├── index.ts              # Entry point (stdio transport)
+├── server.ts             # MCP server setup, Zod input schemas
 ├── types.ts              # Shared interfaces
 ├── scoring.ts            # Match scoring algorithm
-├── cache.ts              # LRU cache (5-min TTL)
-├── http.ts               # Fetch utilities
+├── cache.ts              # Result cache (5-min TTL)
+├── http.ts               # Fetch utilities with timeouts
 ├── tools/                # Tool handlers
 │   ├── verifyCitation.ts
 │   ├── batchVerifyCitations.ts
 │   └── findVerifiedPapers.ts
 └── databases/            # Database adapters
-    ├── index.ts          # Parallel query orchestrator
+    ├── index.ts          # Parallel query orchestrator; drops results without a DOI
     ├── crossref.ts
     ├── openalex.ts
     ├── pubmed.ts
@@ -253,7 +301,8 @@ src/
 **Adding a new database:**
 1. Create `src/databases/newdb.ts` with `config`, `search()`, and `normalize()`
 2. Import and add to `src/databases/index.ts`
-3. Add tests in `tests/databases/newdb.test.ts`
+3. Add it to the database lists in the tool descriptions in `src/server.ts`
+4. Add tests in `tests/databases/newdb.test.ts`
 
 ## Example Usage
 
@@ -268,22 +317,22 @@ Assistant: "According to Johnson et al. (2024) in Science, AlphaFold3 achieved..
 ```
 User: "Tell me about recent AlphaFold research"
 Assistant: [Uses findVerifiedPapers tool]
-           "According to Jumper et al. (2023) in Nature (DOI: 10.1038/s41586-023-06004-9), 
-            AlphaFold3 achieved..."
-           ✓ Real paper with valid DOI verified across databases
+           "According to Abramson et al. (2024) in Nature (https://doi.org/10.1038/s41586-024-07487-w),
+            AlphaFold 3 predicts..."
+           ✓ Real paper with a DOI
 ```
 
 **Verification catches fake citations:**
 ```
 User: "Can you verify this citation: Smith et al. (2024), 'Quantum AI', Nature"
 Assistant: [Uses verifyCitation tool - searches all 9 databases in parallel]
-           "⚠ I cannot verify this citation - no matching publication found in
-            any of the 9 databases. This citation may be incorrect."
+           "⚠ I cannot verify this citation - no matching publication with a DOI
+            was found in any of the 9 databases. This citation may be incorrect."
 ```
 
 ## Database Coverage
 
-All databases are queried in parallel for maximum speed (~1 second total):
+All databases are queried in parallel:
 
 ### General Databases
 - **CrossRef**: 150+ million scholarly publications across all disciplines
@@ -299,7 +348,7 @@ All databases are queried in parallel for maximum speed (~1 second total):
 - **INSPIRE-HEP**: 1.7+ million high-energy physics publications
 
 ### Total Coverage
-**600+ million publications** across all academic disciplines with specialized depth in STEM, computer science, biomedical sciences, mathematics, and education research.
+**600+ million publications** across all academic disciplines with specialized depth in STEM, computer science, biomedical sciences, mathematics, and education research. Only records that carry a DOI are used.
 
 ## License
 

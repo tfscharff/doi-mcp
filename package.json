@@ -1,6 +1,6 @@
 {
   "name": "doi-mcp",
-  "version": "4.0.0",
+  "version": "5.0.0",
   "description": "MCP server that prevents citation hallucination by verifying academic citations against 9 authoritative databases",
   "type": "module",
   "main": "dist/index.js",
@@ -12,7 +12,8 @@
     "dev": "tsc --watch",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "ship": "node scripts/ship.mjs"
   },
   "keywords": [
     "mcp",

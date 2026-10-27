@@ -20,6 +20,21 @@ npm run test:coverage                  # v8 coverage -> coverage/ (gitignored)
 
 No linter is configured.
 
+## Releasing (every change is a release)
+
+Don't `git commit` / `git tag` by hand. Finish the change, then:
+
+```bash
+npm run ship -- "fix(scope): short imperative description" --body "User-facing detail.
+
+<Co-Authored-By trailer>"
+npm run ship -- "feat: x" --dry-run   # preview the version bump and changelog entry
+```
+
+`scripts/ship.mjs` (ported from the zoteamo repo) checks the Conventional Commit header, runs `npm test`, rebuilds `dist/`, bumps `package.json` (`feat` → minor; `fix`/`docs`/`chore`/etc. → patch; `!` or `BREAKING CHANGE:` → major), prepends `CHANGELOG.md`, commits, tags `vX.Y.Z`, pushes, and runs `gh release create`. It refuses to run off `main` or with a clean tree; `--as X.Y.Z` forces a version. Pure helpers live in `scripts/lib/release.mjs` (tested in `tests/unit/release.test.ts`).
+
+Treat any change to what gets verified or returned, or to tool inputs/outputs, as breaking (`!`).
+
 ## `dist/` is committed
 
 `dist/` is checked in so `npx doi-mcp` works without a build step. After changing `src/`, run `npm run build` and commit the updated `dist/` too. `tsc` never deletes outputs, so when removing or renaming a source file, delete its `dist/` counterparts by hand.
