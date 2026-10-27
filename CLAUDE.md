@@ -15,14 +15,14 @@ npm run dev                            # tsc --watch
 npm test                               # vitest run (all tests)
 npx vitest run tests/unit/scoring.test.ts   # single file
 npx vitest run -t "crossref adapter"        # by test name
-npm run test:coverage                  # needs @vitest/coverage-v8, which is NOT in devDependencies
+npm run test:coverage                  # v8 coverage -> coverage/ (gitignored)
 ```
 
 No linter is configured.
 
 ## `dist/` is committed
 
-`dist/` is checked in so `npx doi-mcp` works without a build step. After changing `src/`, run `npm run build` and commit the updated `dist/` too. `dist/validate.*` is a stale leftover with no `src/` counterpart.
+`dist/` is checked in so `npx doi-mcp` works without a build step. After changing `src/`, run `npm run build` and commit the updated `dist/` too. `tsc` never deletes outputs, so when removing or renaming a source file, delete its `dist/` counterparts by hand.
 
 The server version is read at runtime from `package.json` (`src/server.ts`, via `createRequire('../package.json')`), so bump only `package.json`.
 
