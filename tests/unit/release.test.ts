@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   parseArgs,
+  assertSafeArgs,
   parseHeader,
   bumpFor,
   nextVersion,
@@ -15,6 +16,15 @@ describe('release helpers', () => {
       header: 'fix: x', body: '', bodyFile: 'notes.md', as: '5.0.1', dryRun: true,
     });
     expect(parseArgs(['feat: y', '--body', 'inline'])).toMatchObject({ header: 'feat: y', body: 'inline', bodyFile: null });
+  });
+
+  it('assertSafeArgs refuses inline --body when npm runs on Windows', () => {
+    // Regression: cmd.exe cut --body at a newline, dropped --dry-run, and a real release went out
+    const inline = parseArgs(['fix: x', '--body', 'Line one.']);
+    expect(() => assertSafeArgs(inline, { platform: 'win32', viaNpm: true })).toThrow(/--body-file/);
+    expect(() => assertSafeArgs(inline, { platform: 'win32', viaNpm: false })).not.toThrow();
+    expect(() => assertSafeArgs(inline, { platform: 'linux', viaNpm: true })).not.toThrow();
+    expect(() => assertSafeArgs(parseArgs(['fix: x', '--body-file', 'n.md']), { platform: 'win32', viaNpm: true })).not.toThrow();
   });
 
   it('parseArgs rejects a missing header, extra arguments, and both body options', () => {

@@ -12,7 +12,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { parseArgs, parseHeader, bumpFor, nextVersion, changelogEntry, insertChangelog, releaseNotes } from './lib/release.mjs';
+import { parseArgs, assertSafeArgs, parseHeader, bumpFor, nextVersion, changelogEntry, insertChangelog, releaseNotes } from './lib/release.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const run = (cmd, args, opts = {}) =>
@@ -20,6 +20,7 @@ const run = (cmd, args, opts = {}) =>
 
 function main() {
   const args = parseArgs(process.argv.slice(2));
+  assertSafeArgs(args, { platform: process.platform, viaNpm: Boolean(process.env.npm_lifecycle_event) });
   if (args.bodyFile) args.body = readFileSync(args.bodyFile, 'utf8');
   const parsed = parseHeader(args.header);
 

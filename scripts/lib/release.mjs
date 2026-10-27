@@ -21,6 +21,15 @@ export function parseArgs(argv) {
   return out;
 }
 
+// On Windows, npm runs scripts through cmd.exe, which silently drops everything after the first
+// newline in an argument -- including later flags like --dry-run. A truncated argument list looks
+// valid, so refuse inline --body there entirely.
+export function assertSafeArgs(args, { platform, viaNpm }) {
+  if (platform === 'win32' && viaNpm && args.body) {
+    throw new Error('On Windows, npm truncates --body at the first newline (and drops any flags after it). Write the notes to a file and pass --body-file instead.');
+  }
+}
+
 export function parseHeader(header) {
   const m = HEADER.exec(header.trim());
   if (!m) {

@@ -271,8 +271,10 @@ Tests mock all network calls; nothing hits the live APIs.
 `dist/` is committed so `npx` can run the server straight from GitHub. Don't commit or tag releases by hand; use:
 
 ```bash
-npm run ship -- "fix(pubmed): handle missing PMIDs" --body "Optional details for the release notes."
+npm run ship -- "fix(pubmed): handle missing PMIDs" --body-file notes.md
 ```
+
+The optional notes file becomes the body of the `CHANGELOG.md` entry and the GitHub release notes. On Windows, npm cuts inline arguments off at the first newline, so `ship` refuses `--body` there; use `--body-file`.
 
 `scripts/ship.mjs` checks the header is a [Conventional Commit](https://www.conventionalcommits.org/), runs the tests, rebuilds `dist/`, bumps the version (`feat` → minor; `fix`, `docs`, `chore`, etc. → patch; `!` or `BREAKING CHANGE:` → major), adds a `CHANGELOG.md` entry, then commits, tags `vX.Y.Z`, pushes, and creates the GitHub release. Use `--dry-run` to preview, or `--as X.Y.Z` to force a version. It only runs on `main` with uncommitted changes.
 

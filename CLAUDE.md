@@ -25,9 +25,7 @@ No linter is configured.
 Don't `git commit` / `git tag` by hand. Finish the change, then:
 
 ```bash
-npm run ship -- "fix(scope): short imperative description" --body "User-facing detail.
-
-<Co-Authored-By trailer>"
+npm run ship -- "fix(scope): short imperative description" --body-file notes.md
 npm run ship -- "feat: x" --dry-run   # preview the version bump and changelog entry
 ```
 
