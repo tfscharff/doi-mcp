@@ -51,6 +51,7 @@ To add one: create the file, add it to the `adapters` object in `databases/index
 - Year: +3 exact, +1 within ±1
 - Authors: +2 per query author whose last whitespace-separated token appears in any result author
 - `MATCH_THRESHOLD=3` (verified), `HIGH_CONFIDENCE_THRESHOLD=5`, `EARLY_EXIT_THRESHOLD=8`
+- `findBestMatch` skips any candidate without a title or author match (`hasIdentityMatch`). Without this, a year match alone (+3) reached the threshold and fabricated citations verified against unrelated papers from the same year.
 
 The early exit only short-circuits `findBestMatch`'s loop over already-fetched results; all database queries still run to completion.
 

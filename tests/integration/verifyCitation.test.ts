@@ -92,6 +92,19 @@ describe('verifyCitation tool (scoring paths)', () => {
     ]);
   });
 
+  it('does not verify a fabricated citation whose only match is the year', async () => {
+    mockCrossRefOnly([{ title: ['Prayer Basket'], published: { 'date-parts': [[2019]] }, DOI: '10.1525/x' }]);
+
+    const parsed = parse(await verifyCitation({
+      title: 'Quantum Entanglement in Medieval Basket Weaving Guilds',
+      authors: ['Zzyzx'],
+      year: 2019,
+    }));
+
+    expect(parsed.verified).toBe(false);
+    expect(parsed.message).toContain('Could not confidently verify');
+  });
+
   it('builds the search query from title, authors and journal', async () => {
     mockCrossRefOnly([]);
 

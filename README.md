@@ -42,7 +42,7 @@ Large language models sometimes "hallucinate" academic citations - citing papers
 - **Find Verified Papers**: Search for real papers on a topic and get only verified citations
 - **Parallel Processing**: All database queries run simultaneously for maximum speed
 - **LRU Caching**: Repeated queries return instantly (5-minute TTL)
-- **Early Exit**: High-confidence matches (score ≥8) return immediately without waiting for all databases
+- **Early Exit**: Scoring stops at the first candidate scoring ≥8 instead of scoring every result
 - **Source Selection**: Search all databases or target specific sources
 - **Citation Formatting**: Returns properly formatted citations with DOIs
 - **Zero Configuration**: All databases work out-of-the-box with no API keys required

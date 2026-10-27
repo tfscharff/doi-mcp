@@ -96,6 +96,14 @@ describe('crossref adapter', () => {
       expect(normalized.abstract).toBe('This is the abstract.');
     });
 
+    it('falls back to the issued date when published is missing', () => {
+      expect(normalize({ issued: { 'date-parts': [[2024, 5]] } }).year).toBe(2024);
+    });
+
+    it('leaves year undefined when CrossRef has no date (issued: [[null]])', () => {
+      expect(normalize({ issued: { 'date-parts': [[null as any]] } }).year).toBeUndefined();
+    });
+
     it('handles missing fields gracefully', () => {
       const raw = {};
       const normalized = normalize(raw);

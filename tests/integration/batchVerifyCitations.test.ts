@@ -91,6 +91,18 @@ describe('batchVerifyCitations tool', () => {
     expect(decodeURIComponent(crossrefUrl)).toContain('query=Ghost Paper Nobody Nowhere');
   });
 
+  it('does not verify a citation whose only match is the year', async () => {
+    mockFetch.mockImplementation((url: string) => (url.includes('crossref')
+      ? ok({ message: { items: [{ title: ['Prayer Basket'], published: { 'date-parts': [[2019]] } }] } })
+      : ok({})));
+
+    const parsed = parse(await batchVerifyCitations({
+      citations: [{ id: 'fake', title: 'Neural Toaster Calibration', year: 2019 }],
+    }));
+
+    expect(parsed.results[0]).toMatchObject({ id: 'fake', verified: false, message: 'Could not confidently verify' });
+  });
+
   it('returns isError when the input is malformed', async () => {
     const result = await batchVerifyCitations({ citations: null as any });
 

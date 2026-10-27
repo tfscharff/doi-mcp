@@ -9,6 +9,9 @@ interface CrossRefWork {
     published?: {
         'date-parts'?: number[][];
     };
+    issued?: {
+        'date-parts'?: number[][];
+    };
     DOI?: string;
     'container-title'?: string[];
     abstract?: string;

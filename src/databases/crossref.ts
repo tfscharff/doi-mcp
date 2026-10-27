@@ -14,6 +14,7 @@ interface CrossRefWork {
   title?: string[];
   author?: Array<{ given?: string; family?: string }>;
   published?: { 'date-parts'?: number[][] };
+  issued?: { 'date-parts'?: number[][] };
   DOI?: string;
   'container-title'?: string[];
   abstract?: string;
@@ -50,7 +51,8 @@ export function normalize(result: CrossRefWork): NormalizedPaper {
     source: config.displayName,
     title: result.title?.[0],
     authors: result.author?.map(a => `${a.given || ''} ${a.family || ''}`.trim()),
-    year: result.published?.['date-parts']?.[0]?.[0],
+    // issued is [[null]] when CrossRef has no date at all
+    year: result.published?.['date-parts']?.[0]?.[0] || result.issued?.['date-parts']?.[0]?.[0] || undefined,
     doi: result.DOI,
     journal: result['container-title']?.[0],
     abstract: result.abstract?.replace(/<[^>]*>/g, ''),

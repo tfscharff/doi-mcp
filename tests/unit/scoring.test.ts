@@ -118,11 +118,44 @@ describe('findBestMatch', () => {
 
   it('returns first match when scores are equal', () => {
     const papers: NormalizedPaper[] = [
-      { source: 'First', year: 2023 },
-      { source: 'Second', year: 2023 },
+      { source: 'First', title: 'Test Paper', year: 2023 },
+      { source: 'Second', title: 'Test Paper', year: 2023 },
     ];
-    const result = findBestMatch(papers, { year: 2023 });
+    const result = findBestMatch(papers, { title: 'Test Paper', year: 2023 });
     expect(result.match?.source).toBe('First');
+  });
+
+  it('ignores papers that match only on year', () => {
+    // Regression: a fabricated title verified because an unrelated paper shared its year
+    const papers: NormalizedPaper[] = [
+      { source: 'CrossRef', title: 'Prayer Basket', year: 2019 },
+    ];
+    const result = findBestMatch(papers, {
+      title: 'Quantum Entanglement in Medieval Basket Weaving Guilds',
+      authors: ['Zzyzx'],
+      year: 2019,
+    });
+    expect(result.match).toBeNull();
+    expect(result.score).toBe(0);
+  });
+
+  it('prefers a lower-scoring title match over a year-only match listed first', () => {
+    const papers: NormalizedPaper[] = [
+      { source: 'YearOnly', title: 'Unrelated', year: 2019 },
+      { source: 'TitleOnly', title: 'Deep Learning', year: 2001 },
+    ];
+    const result = findBestMatch(papers, { title: 'Deep Learning', year: 2019 });
+    expect(result.match?.source).toBe('TitleOnly');
+    expect(result.score).toBe(3);
+  });
+
+  it('accepts an author match without a title match', () => {
+    const papers: NormalizedPaper[] = [
+      { source: 'A', title: 'Different Wording', authors: ['Jane Smith'], year: 2020 },
+    ];
+    const result = findBestMatch(papers, { title: 'Something', authors: ['Smith'], year: 2020 });
+    expect(result.match?.source).toBe('A');
+    expect(result.score).toBe(5);
   });
 
   it('performs early exit at score ≥8', () => {
