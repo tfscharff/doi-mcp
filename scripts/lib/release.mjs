@@ -3,6 +3,24 @@
 const TYPES = ['feat', 'fix', 'perf', 'refactor', 'docs', 'style', 'test', 'build', 'ci', 'chore', 'revert'];
 const HEADER = new RegExp(`^(${TYPES.join('|')})(?:\\(([a-z0-9-]+)\\))?(!)?: (\\S.*)$`);
 
+const USAGE = 'Usage: npm run ship -- "type(scope): description" [--body text | --body-file path] [--as X.Y.Z] [--dry-run]';
+
+export function parseArgs(argv) {
+  const out = { header: null, body: '', bodyFile: null, as: null, dryRun: false };
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === '--body') out.body = argv[++i] ?? '';
+    else if (a === '--body-file') out.bodyFile = argv[++i] ?? null;
+    else if (a === '--as') out.as = argv[++i];
+    else if (a === '--dry-run') out.dryRun = true;
+    else if (!out.header) out.header = a;
+    else throw new Error(`Unexpected argument: ${a}`);
+  }
+  if (!out.header) throw new Error(USAGE);
+  if (out.body && out.bodyFile) throw new Error('Use --body or --body-file, not both.');
+  return out;
+}
+
 export function parseHeader(header) {
   const m = HEADER.exec(header.trim());
   if (!m) {
@@ -30,10 +48,17 @@ export function nextVersion(current, bump) {
   return `${major}.${minor}.${patch + 1}`;
 }
 
-export function changelogEntry(version, date, parsed) {
+// The commit body becomes the release notes, minus git trailers that only matter in history
+export function changelogEntry(version, date, parsed, body = '') {
   const label = parsed.scope ? `${parsed.type}(${parsed.scope})` : parsed.type;
   const bang = parsed.breaking ? '!' : '';
-  return `## [${version}] - ${date}\n\n- **${label}${bang}:** ${parsed.description}\n`;
+  const notes = body.split('\n').filter((l) => !/^Co-Authored-By:/i.test(l)).join('\n').trim();
+  return `## [${version}] - ${date}\n\n- **${label}${bang}:** ${parsed.description}\n${notes ? `\n${notes}\n` : ''}`;
+}
+
+// GitHub release notes are the changelog entry without its version heading
+export function releaseNotes(entry) {
+  return entry.split('\n').slice(2).join('\n').trim();
 }
 
 export function insertChangelog(changelog, entry) {

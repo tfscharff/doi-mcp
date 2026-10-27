@@ -2,35 +2,25 @@
 // Test, rebuild dist/, commit everything, bump the SemVer version, tag, push and publish a GitHub
 // release, in one step. dist/ is committed (npx installs straight from GitHub), so it is rebuilt here.
 //
-// Usage: npm run ship -- "<type>(<scope>)!: <description>" [--body "<text>"] [--as X.Y.Z] [--dry-run]
+// Usage: npm run ship -- "<type>(<scope>)!: <description>" [--body "<text>" | --body-file <path>]
+//          [--as X.Y.Z] [--dry-run]
 //   feat -> minor, fix/docs/chore/etc. -> patch, "!" or "BREAKING CHANGE:" in body -> major
 //   (before 1.0.0 a breaking change bumps minor). --as forces an exact version.
+//   The body becomes the CHANGELOG entry's notes and the GitHub release notes. On Windows, npm runs
+//   scripts through cmd.exe, which cuts --body off at the first newline: use --body-file there.
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { parseHeader, bumpFor, nextVersion, changelogEntry, insertChangelog } from './lib/release.mjs';
+import { parseArgs, parseHeader, bumpFor, nextVersion, changelogEntry, insertChangelog, releaseNotes } from './lib/release.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const run = (cmd, args, opts = {}) =>
   execFileSync(cmd, args, { cwd: root, encoding: 'utf8', stdio: opts.inherit ? 'inherit' : 'pipe', shell: process.platform === 'win32' && cmd === 'npm' });
 
-function parseArgs(argv) {
-  const out = { header: null, body: '', as: null, dryRun: false };
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    if (a === '--body') out.body = argv[++i] ?? '';
-    else if (a === '--as') out.as = argv[++i];
-    else if (a === '--dry-run') out.dryRun = true;
-    else if (!out.header) out.header = a;
-    else throw new Error(`Unexpected argument: ${a}`);
-  }
-  if (!out.header) throw new Error('Usage: npm run ship -- "type(scope): description" [--body text] [--as X.Y.Z] [--dry-run]');
-  return out;
-}
-
 function main() {
   const args = parseArgs(process.argv.slice(2));
+  if (args.bodyFile) args.body = readFileSync(args.bodyFile, 'utf8');
   const parsed = parseHeader(args.header);
 
   const branch = run('git', ['symbolic-ref', '--short', 'HEAD']).trim();
@@ -45,7 +35,7 @@ function main() {
   if (run('git', ['tag', '--list', tag]).trim()) throw new Error(`Tag ${tag} already exists.`);
 
   const date = new Date().toISOString().slice(0, 10);
-  const entry = changelogEntry(version, date, parsed);
+  const entry = changelogEntry(version, date, parsed, args.body);
   console.log(`${pkg.version} -> ${version} (${tag})\n\n${entry}`);
   if (args.dryRun) return console.log('Dry run: nothing changed.');
 
@@ -75,9 +65,7 @@ function main() {
   const hasUpstream = (() => { try { run('git', ['rev-parse', '@{u}']); return true; } catch { return false; } })();
   run('git', hasUpstream ? ['push', '--follow-tags'] : ['push', '-u', 'origin', 'main', '--follow-tags'], { inherit: true });
 
-  const bodyNotes = args.body.split('\n').filter((l) => !/^Co-Authored-By:/i.test(l)).join('\n').trim();
-  const notes = entry.split('\n').slice(2).join('\n').trim() + (bodyNotes ? `\n\n${bodyNotes}` : '');
-  run('gh', ['release', 'create', tag, '--title', tag, '--notes', notes, '--verify-tag'], { inherit: true });
+  run('gh', ['release', 'create', tag, '--title', tag, '--notes', releaseNotes(entry), '--verify-tag'], { inherit: true });
   console.log(`Released ${tag}.`);
 }
 

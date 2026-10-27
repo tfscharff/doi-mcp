@@ -1,13 +1,28 @@
 import { describe, it, expect } from 'vitest';
 import {
+  parseArgs,
   parseHeader,
   bumpFor,
   nextVersion,
   changelogEntry,
   insertChangelog,
+  releaseNotes,
 } from '../../scripts/lib/release.mjs';
 
 describe('release helpers', () => {
+  it('parseArgs reads the header and options', () => {
+    expect(parseArgs(['fix: x', '--body-file', 'notes.md', '--as', '5.0.1', '--dry-run'])).toEqual({
+      header: 'fix: x', body: '', bodyFile: 'notes.md', as: '5.0.1', dryRun: true,
+    });
+    expect(parseArgs(['feat: y', '--body', 'inline'])).toMatchObject({ header: 'feat: y', body: 'inline', bodyFile: null });
+  });
+
+  it('parseArgs rejects a missing header, extra arguments, and both body options', () => {
+    expect(() => parseArgs(['--dry-run'])).toThrow(/Usage/);
+    expect(() => parseArgs(['fix: x', 'stray'])).toThrow(/Unexpected argument: stray/);
+    expect(() => parseArgs(['fix: x', '--body', 'a', '--body-file', 'b'])).toThrow(/not both/);
+  });
+
   it('parseHeader reads type, scope, breaking flag and description', () => {
     expect(parseHeader('feat(scoring): add author weighting')).toEqual({
       type: 'feat', scope: 'scoring', breaking: false, description: 'add author weighting',
@@ -48,6 +63,24 @@ describe('release helpers', () => {
     expect(changelogEntry('5.0.1', '2026-10-28', parseHeader('fix(pubmed): parse DOIs'))).toBe(
       '## [5.0.1] - 2026-10-28\n\n- **fix(pubmed):** parse DOIs\n',
     );
+  });
+
+  it('changelogEntry appends the body as release notes, without Co-Authored-By trailers', () => {
+    const body = 'BREAKING CHANGE: results without a DOI are dropped.\n\nFixes:\n- one\n\nCo-Authored-By: Someone <x@example.com>\n';
+    expect(changelogEntry('5.0.0', '2026-10-27', parseHeader('feat!: only DOIs'), body)).toBe(
+      '## [5.0.0] - 2026-10-27\n\n- **feat!:** only DOIs\n\nBREAKING CHANGE: results without a DOI are dropped.\n\nFixes:\n- one\n',
+    );
+  });
+
+  it('changelogEntry ignores a body that is only trailers or whitespace', () => {
+    expect(changelogEntry('5.0.1', '2026-10-28', parseHeader('fix: x'), '\nCo-Authored-By: A <a@b.c>\n  ')).toBe(
+      '## [5.0.1] - 2026-10-28\n\n- **fix:** x\n',
+    );
+  });
+
+  it('releaseNotes is the entry without its version heading', () => {
+    const entry = '## [5.0.0] - 2026-10-27\n\n- **feat!:** only DOIs\n\nDetails here.\n';
+    expect(releaseNotes(entry)).toBe('- **feat!:** only DOIs\n\nDetails here.');
   });
 
   it('insertChangelog puts the newest entry directly under the intro', () => {
