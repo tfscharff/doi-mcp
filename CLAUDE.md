@@ -1,119 +1,59 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code when working with code in this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
 
-MCP server that prevents citation hallucination by verifying academic citations against 9 authoritative databases (CrossRef, OpenAlex, PubMed, zbMATH, ERIC, HAL, INSPIRE-HEP, Semantic Scholar, DBLP).
+MCP server (stdio) that prevents citation hallucination by verifying academic citations against 9 databases: CrossRef, OpenAlex, PubMed, zbMATH, ERIC, HAL, INSPIRE-HEP, Semantic Scholar, DBLP. ESM TypeScript, Node >=18, Zod for tool input schemas.
+
+## Commands
+
+```bash
+npm install
+npm run build                          # tsc -> dist/
+npm run dev                            # tsc --watch
+npm test                               # vitest run (all tests)
+npx vitest run tests/unit/scoring.test.ts   # single file
+npx vitest run -t "crossref adapter"        # by test name
+npm run test:coverage                  # needs @vitest/coverage-v8, which is NOT in devDependencies
+```
+
+No linter is configured.
+
+## `dist/` is committed
+
+`dist/` is checked in so `npx doi-mcp` works without a build step. After changing `src/`, run `npm run build` and commit the updated `dist/` too. `dist/validate.*` is a stale leftover with no `src/` counterpart.
+
+The server version is read at runtime from `package.json` (`src/server.ts`, via `createRequire('../package.json')`), so bump only `package.json`.
 
 ## Architecture
 
-### Modular Structure
+Request flow: `index.ts` (stdio transport) → `server.ts` (`createServer()` registers 3 tools, 2 resources `citation://databases` / `citation://guidelines`, and a prompt; Zod schemas live here) → `tools/*.ts` → `databases/index.ts` → adapters.
 
-```
-src/
-├── index.ts              # Entry point (~10 lines)
-├── server.ts             # MCP setup, tool registration (~200 lines)
-├── types.ts              # Interfaces and constants
-├── scoring.ts            # Match scoring algorithm
-├── validate.ts           # Input validation
-├── cache.ts              # LRU cache (5-min TTL)
-├── http.ts               # Shared fetch utilities
-├── tools/
-│   ├── verifyCitation.ts
-│   ├── batchVerifyCitations.ts
-│   └── findVerifiedPapers.ts
-└── databases/
-    ├── index.ts          # Parallel query orchestrator
-    ├── crossref.ts
-    ├── openalex.ts
-    ├── pubmed.ts
-    ├── semanticscholar.ts
-    ├── dblp.ts
-    ├── zbmath.ts
-    ├── eric.ts
-    ├── hal.ts
-    └── inspirehep.ts
-```
+- **`databases/index.ts`** — `searchMultipleSources()` runs every adapter (or a `sources` subset) in parallel via `Promise.all`; per-adapter failures are caught and returned in `errors` rather than failing the call. Also exports `allDatabases` metadata and `deduplicatePapers()` (keyed by DOI, else lowercased title).
+- **PubMed is special-cased**: its search returns PMIDs/summaries, then the orchestrator calls `getDOIsFromPubMed()` and passes the DOI map as a second arg to `pubmed.normalize()`.
+- **`tools/verifyCitation.ts`** — if a DOI is given, it first resolves it directly via doi.org content negotiation (CSL-JSON); only on failure does it fall back to the multi-database search + scoring.
+- **`http.ts`** — `fetchJson` / `fetchText` / `fetchWithRedirect`, each with a 10s default timeout. A caller-provided `signal` replaces the timeout signal.
+- **`cache.ts`** — module-global `Map`, 5-min TTL, 100 entries, evicts oldest *inserted* (FIFO, not true LRU). Only successful verifications are cached. Call `cache.clear()` between tests that hit the same keys.
 
-Each file is <200 lines for maintainability.
+### Adapter contract
 
-### Database Adapter Pattern
+Each `src/databases/<name>.ts` exports:
+- `config: DatabaseConfig` — `{ name, displayName, baseUrl, coverage }`
+- `search(query, options)` — raw results
+- `normalize(raw)` — `NormalizedPaper` (the orchestrator filters out `null`s)
 
-Each adapter exports:
-- `config`: DatabaseConfig with name, baseUrl, coverage
-- `search(query, options)`: Returns raw results
-- `normalize(result)`: Converts to NormalizedPaper
+To add one: create the file, add it to the `adapters` object in `databases/index.ts`, update the hardcoded database lists in the `verifyCitation` and `findVerifiedPapers` descriptions in `server.ts` and the README, and add `tests/databases/<name>.test.ts`.
 
-### Speed Optimizations
+### Scoring (`scoring.ts`, thresholds in `types.ts`)
 
-1. **LRU Cache** (`cache.ts`): 5-minute TTL, 100 entries max
-2. **Parallel Queries**: All 9 databases queried simultaneously
-3. **Early Exit**: Stops at score ≥8 for high-confidence matches
-4. **Timeout Handling**: 10-second default per request
+- Title: +3 if the result title contains the first 30 chars of the query title (case-insensitive substring)
+- Year: +3 exact, +1 within ±1
+- Authors: +2 per query author whose last whitespace-separated token appears in any result author
+- `MATCH_THRESHOLD=3` (verified), `HIGH_CONFIDENCE_THRESHOLD=5`, `EARLY_EXIT_THRESHOLD=8`
 
-### Scoring Algorithm (`scoring.ts`)
-
-- Title match: +3 points (first 30 chars, case-insensitive)
-- Year exact: +3 points (±1 year: +1 point)
-- Author match: +2 points per matched last name
-- Thresholds: MATCH=3, HIGH_CONFIDENCE=5, EARLY_EXIT=8
-
-## Development Commands
-
-```bash
-npm install       # Install dependencies
-npm run build     # Compile TypeScript
-npm run dev       # Watch mode
-npm test          # Run tests
-npm run test:coverage  # Coverage report
-```
-
-## Adding a New Database
-
-1. Create `src/databases/newdb.ts`:
-   ```typescript
-   export const config: DatabaseConfig = { name, displayName, baseUrl, coverage };
-   export async function search(query, options): Promise<RawResult[]>;
-   export function normalize(result): NormalizedPaper;
-   ```
-2. Import and add to `src/databases/index.ts` adapters object
-3. Add tests in `tests/databases/newdb.test.ts`
-
-## Key Types
-
-```typescript
-interface NormalizedPaper {
-  source: string;
-  title?: string;
-  authors?: string[];
-  year?: number;
-  doi?: string;
-  journal?: string;
-  abstract?: string;
-}
-
-interface SearchResults {
-  results: NormalizedPaper[];
-  errors: DatabaseError[];
-  sources: string[];
-}
-```
-
-## Tool Annotations
-
-All tools use MCP annotations:
-- `readOnlyHint: true` - Read-only operations
-- `destructiveHint: false` - Safe to repeat
-- `idempotentHint: true` - Deterministic results
+The early exit only short-circuits `findBestMatch`'s loop over already-fetched results; all database queries still run to completion.
 
 ## Testing
 
-Tests use Vitest with mocked fetch responses. No live API calls in CI.
-
-```
-tests/
-├── unit/           # scoring, cache, validate
-├── databases/      # adapter tests with mocks
-└── integration/    # end-to-end tool tests
-```
+Vitest with `globals: true`; tests in `tests/**/*.test.ts` (`unit/`, `databases/`, `integration/`). Tests mock `global.fetch` with `vi.fn()` — no live API calls. Only CrossRef and PubMed currently have adapter tests.
