@@ -5,6 +5,9 @@ export declare function createServer(): import("@modelcontextprotocol/sdk/server
         _meta?: {
             [x: string]: unknown;
             progressToken?: string | number | undefined;
+            "io.modelcontextprotocol/related-task"?: {
+                taskId: string;
+            } | undefined;
         } | undefined;
     } | undefined;
 }, {
@@ -13,11 +16,19 @@ export declare function createServer(): import("@modelcontextprotocol/sdk/server
         [x: string]: unknown;
         _meta?: {
             [x: string]: unknown;
+            progressToken?: string | number | undefined;
+            "io.modelcontextprotocol/related-task"?: {
+                taskId: string;
+            } | undefined;
         } | undefined;
     } | undefined;
 }, {
     [x: string]: unknown;
     _meta?: {
         [x: string]: unknown;
+        progressToken?: string | number | undefined;
+        "io.modelcontextprotocol/related-task"?: {
+            taskId: string;
+        } | undefined;
     } | undefined;
 }>;
