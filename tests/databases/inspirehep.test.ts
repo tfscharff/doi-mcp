@@ -32,9 +32,11 @@ describe('inspirehep adapter', () => {
       const results = await search('higgs boson', { limit: 5 });
 
       expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('inspirehep.net/api/literature?q=higgs%20boson&size=5&sort=mostrecent'),
+        expect.stringContaining('inspirehep.net/api/literature?q=higgs%20boson&size=5'),
         expect.any(Object)
       );
+      // Relevance order: `sort=mostrecent` surfaced new preprints that have no DOI yet
+      expect(mockFetch.mock.calls[0][0]).not.toContain('sort=');
       expect(results).toHaveLength(1);
     });
 

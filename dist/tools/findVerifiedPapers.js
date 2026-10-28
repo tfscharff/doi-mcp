@@ -17,12 +17,25 @@ export async function findVerifiedPapers(input) {
             limit,
             sources,
         });
+        const { errors } = searchResults;
+        const failed = errors.map(e => `${e.database} (${e.message})`).join(', ');
         if (searchResults.results.length === 0) {
+            // A failed database proves nothing about whether papers exist, so say which ones failed
+            const allFailed = errors.length > 0 && errors.length === searchResults.sources.length;
+            const message = allFailed
+                ? `Every database queried failed, so no papers could be checked: ${failed}.`
+                : errors.length > 0
+                    ? `No papers with a DOI found in the databases that responded. These failed: ${failed}.`
+                    : 'No papers with a DOI found for this query in any database.';
+            const result = {
+                count: 0,
+                message,
+                sourcesQueried: searchResults.sources,
+                errors: errors.length > 0 ? errors : undefined,
+            };
             return {
-                content: [{
-                        type: 'text',
-                        text: 'No verified papers found for this query across all sources.',
-                    }],
+                content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+                ...(allFailed ? { isError: true } : {}),
             };
         }
         const uniquePapers = deduplicatePapers(searchResults.results);
@@ -42,8 +55,11 @@ export async function findVerifiedPapers(input) {
             sources: [...new Set(citations.map(c => c.source))],
             papers: citations,
             note: 'All citations are verified from multiple academic databases. Use the doiUrl field to access papers.',
+            errors: errors.length > 0 ? errors : undefined,
         };
-        cache.set(cacheKey, result);
+        // Don't cache partial results: a failed database may be back on the next call
+        if (errors.length === 0)
+            cache.set(cacheKey, result);
         return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     }
     catch (error) {

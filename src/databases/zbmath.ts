@@ -1,4 +1,4 @@
-// zbMATH database adapter (mathematics)
+// zbMATH Open database adapter (mathematics)
 
 import type { NormalizedPaper, DatabaseConfig, DatabaseError } from '../types.js';
 import { fetchJson } from '../http.js';
@@ -11,17 +11,15 @@ export const config: DatabaseConfig = {
 };
 
 interface ZbMathResult {
-  title?: string;
-  authors?: Array<{ name?: string } | string>;
-  year?: number;
-  publication_year?: number;
-  doi?: string;
-  source?: string;
-  journal?: string;
+  title?: { title?: string | null; subtitle?: string | null };
+  contributors?: { authors?: Array<{ name?: string }> };
+  year?: string;
+  links?: Array<{ type?: string; identifier?: string }>;
+  source?: { series?: Array<{ title?: string }>; source?: string };
 }
 
 interface ZbMathResponse {
-  result?: ZbMathResult[];
+  result?: ZbMathResult[] | null;
 }
 
 export async function search(
@@ -30,10 +28,9 @@ export async function search(
 ): Promise<ZbMathResult[]> {
   const { year, limit = 3, signal } = options;
 
-  let url = `${config.baseUrl}/document/_structured_search?query=${encodeURIComponent(query)}&results_per_page=${limit}`;
-  if (year) {
-    url += `&year=${year}`;
-  }
+  // zbMATH query language: `py:` filters by publication year
+  const searchString = year ? `${query} py:${year}` : query;
+  const url = `${config.baseUrl}/v1/document/_search?search_string=${encodeURIComponent(searchString)}&page=0&results_per_page=${limit}`;
 
   try {
     const data = await fetchJson<ZbMathResponse>(url, { signal });
@@ -47,14 +44,12 @@ export async function search(
 }
 
 export function normalize(result: ZbMathResult): NormalizedPaper {
-  const authors = result.authors?.map(a => (typeof a === 'string' ? a : a.name || '')).filter(Boolean);
-
   return {
     source: config.displayName,
-    title: result.title,
-    authors,
-    year: result.year || result.publication_year,
-    doi: result.doi,
-    journal: result.source || result.journal,
+    title: result.title?.title || undefined,
+    authors: result.contributors?.authors?.map(a => a.name).filter((n): n is string => !!n),
+    year: result.year ? parseInt(result.year) : undefined,
+    doi: result.links?.find(l => l.type === 'doi')?.identifier,
+    journal: result.source?.series?.[0]?.title || result.source?.source,
   };
 }

@@ -44,10 +44,22 @@ The server version is read at runtime from `package.json` (`src/server.ts`, via 
 Request flow: `index.ts` (stdio transport) → `server.ts` (`createServer()` registers 3 tools, 2 resources `citation://databases` / `citation://guidelines`, and a prompt; Zod schemas live here) → `tools/*.ts` → `databases/index.ts` → adapters.
 
 - **`databases/index.ts`** — `searchMultipleSources()` runs every adapter (or a `sources` subset) in parallel via `Promise.all`; per-adapter failures are caught and returned in `errors` rather than failing the call. Also exports `allDatabases` metadata and `deduplicatePapers()` (keyed by DOI, else lowercased title).
-- **DOI-only scope**: `searchMultipleSources` drops every result without a DOI, so all tools only ever match, suggest, or return DOI-backed papers (typed as `DoiPaper`). Don't add fallbacks that surface DOI-less records.
+- **DOI-only scope**: `searchMultipleSources` drops every result without a DOI, so all tools only ever match, suggest, or return DOI-backed papers (typed as `DoiPaper`). Don't add fallbacks that surface DOI-less records. It asks each adapter for `limit * OVERFETCH_FACTOR` (3) results, filters, then trims each source back to `limit`. Where an API can filter to DOI-bearing records server-side, the adapter does (HAL `fq=doiId_s:*`, ERIC `url:*doi.org*`).
+- **Never swallow `errors`**: every tool response that isn't a verified match includes `errors` (a failed database may hold the match). `findVerifiedPapers` says which databases failed, sets `isError` when all of them did, and doesn't cache results that had errors.
 - **PubMed is special-cased**: its search returns PMIDs/summaries, then the orchestrator calls `getDOIsFromPubMed()` and passes the DOI map as a second arg to `pubmed.normalize()`.
 - **`tools/verifyCitation.ts`** — if a DOI is given, it first resolves it directly via doi.org content negotiation (CSL-JSON); only on failure does it fall back to the multi-database search + scoring.
-- **`http.ts`** — `fetchJson` / `fetchText` / `fetchWithRedirect`, each with a 10s default timeout. A caller-provided `signal` replaces the timeout signal.
+- **`http.ts`** — `fetchJson` / `fetchText` / `fetchWithRedirect`, each with a 10s default timeout. A caller-provided `signal` replaces the timeout signal. Non-OK responses throw `HttpError` (has `.status`); `fetchJson` rejects `text/html` responses (bot checks).
+
+### Live API quirks (verified 2026-10-27)
+
+- **ERIC** has no DOI field; DOIs appear only as doi.org links in `url`, which must be requested via `fields=`.
+- **HAL** returns only `docid`/`label_s` unless `fl=` names the fields.
+- **zbMATH** uses `/v1/document/_search?search_string=` (the old `_structured_search?query=` returns 400); DOIs are in `links[]` with `type: 'doi'`; year filter is `py:YYYY` in the query.
+- **INSPIRE-HEP**: don't sort by `mostrecent`; new preprints have no DOI yet.
+- **Semantic Scholar** 429s on the shared anonymous quota; `SEMANTIC_SCHOLAR_API_KEY` is sent as `x-api-key`.
+- **DBLP** serves an Anubis "not a bot" HTML page (HTTP 202) to all API clients. Don't try to solve or evade the challenge; it fails with an explanatory error.
+
+To check adapters live, call the built `dist/databases/<name>.js` `search()`/`normalize()` directly (tests never hit the network).
 - **`cache.ts`** — module-global `Map`, 5-min TTL, 100 entries, evicts oldest *inserted* (FIFO, not true LRU). Only successful verifications are cached. Call `cache.clear()` between tests that hit the same keys.
 
 ### Adapter contract

@@ -10,13 +10,16 @@ export const config: DatabaseConfig = {
   coverage: '1.7+ million education publications',
 };
 
+// ERIC has no DOI field; a record's DOI only appears as a doi.org link in `url`
+const FIELDS = 'id,title,author,publicationdateyear,source,publicationtype,url';
+
 interface ERICDoc {
   title?: string;
   author?: string[];
-  publicationdateyear?: string;
-  doi?: string;
+  publicationdateyear?: number | string;
   source?: string;
-  publicationtype?: string;
+  publicationtype?: string | string[];
+  url?: string;
 }
 
 interface ERICResponse {
@@ -29,7 +32,8 @@ export async function search(
 ): Promise<ERICDoc[]> {
   const { limit = 3, signal } = options;
 
-  const url = `${config.baseUrl}/?search=${encodeURIComponent(query)}&rows=${limit}&format=json`;
+  const doiOnly = `(${query}) AND url:*doi.org*`;
+  const url = `${config.baseUrl}/?search=${encodeURIComponent(doiOnly)}&rows=${limit}&format=json&fields=${FIELDS}`;
 
   try {
     const data = await fetchJson<ERICResponse>(url, { signal });
@@ -43,12 +47,15 @@ export async function search(
 }
 
 export function normalize(result: ERICDoc): NormalizedPaper {
+  const doi = result.url?.match(/doi\.org\/(10\..+)$/)?.[1];
+  const type = Array.isArray(result.publicationtype) ? result.publicationtype[0] : result.publicationtype;
+
   return {
     source: config.displayName,
     title: result.title,
     authors: result.author?.filter(Boolean),
-    year: result.publicationdateyear ? parseInt(result.publicationdateyear) : undefined,
-    doi: result.doi,
-    journal: result.source || result.publicationtype,
+    year: result.publicationdateyear ? Number(result.publicationdateyear) : undefined,
+    doi,
+    journal: result.source || type,
   };
 }

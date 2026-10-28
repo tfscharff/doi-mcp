@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { search, normalize, config } from '../../src/databases/semanticscholar.js';
 
 // Mock global fetch
@@ -57,9 +57,37 @@ describe('semanticscholar adapter', () => {
     });
 
     it('throws API_ERROR on HTTP failure', async () => {
-      mockFetch.mockResolvedValue({ ok: false, status: 429, statusText: 'Too Many Requests' });
+      mockFetch.mockResolvedValue({ ok: false, status: 500, statusText: 'Internal Server Error' });
 
       await expect(search('test')).rejects.toMatchObject({ code: 'API_ERROR', database: 'Semantic Scholar' });
+    });
+
+    describe('rate limits and API key', () => {
+      afterEach(() => {
+        delete process.env.SEMANTIC_SCHOLAR_API_KEY;
+      });
+
+      it('throws RATE_LIMITED on 429 with a hint to set an API key', async () => {
+        mockFetch.mockResolvedValue({ ok: false, status: 429, statusText: '' });
+
+        await expect(search('test')).rejects.toMatchObject({
+          code: 'RATE_LIMITED',
+          database: 'Semantic Scholar',
+          message: expect.stringContaining('set SEMANTIC_SCHOLAR_API_KEY'),
+        });
+        expect(mockFetch.mock.calls[0][1].headers).not.toHaveProperty('x-api-key');
+      });
+
+      it('sends SEMANTIC_SCHOLAR_API_KEY as x-api-key when set', async () => {
+        process.env.SEMANTIC_SCHOLAR_API_KEY = 'k123';
+        mockFetch.mockResolvedValue({ ok: false, status: 429, statusText: '' });
+
+        await expect(search('test')).rejects.toMatchObject({
+          code: 'RATE_LIMITED',
+          message: expect.stringContaining("the API key's quota is exhausted"),
+        });
+        expect(mockFetch.mock.calls[0][1].headers['x-api-key']).toBe('k123');
+      });
     });
 
     it('throws ABORTED when the request is aborted', async () => {

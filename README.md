@@ -26,7 +26,7 @@ Or add to your Claude Desktop config:
 }
 ```
 
-To pin a release, append its tag: `github:tfscharff/doi-mcp#v5.0.0`. See [Releases](#releases).
+To pin a release, append its tag: `github:tfscharff/doi-mcp#v6.0.0`. See [Releases](#releases).
 
 ## The Problem This Solves
 
@@ -46,7 +46,8 @@ Large language models sometimes "hallucinate" academic citations - citing papers
 - **Parallel Processing**: All database queries run simultaneously
 - **Caching**: Repeated successful queries return instantly (5-minute TTL, 100 entries)
 - **Source Selection**: Search all databases or target specific sources
-- **Zero Configuration**: All databases work out-of-the-box with no API keys required
+- **Zero Configuration**: No API keys required (an optional Semantic Scholar key avoids its shared rate limit)
+- **Failures are reported, not hidden**: When a database errors or rate-limits, responses name it and say why, so a failed lookup is never mistaken for "no such paper"
 - **Fully Tested**: 100% line coverage across scoring, caching, HTTP, all 9 database adapters, the tools, and the MCP server itself
 
 ## How It Works
@@ -76,7 +77,9 @@ A candidate is only considered if it has a DOI **and** matches on title or at le
 
 - **Papers without a DOI can't be verified.** Some real papers, such as conference proceedings that never received a DOI, will come back `verified: false`. This is deliberate: the server only vouches for citations it can link to.
 - **Speed depends on the slowest database.** Most lookups take one to a few seconds; title/author searches wait for all 9 databases.
-- **Semantic Scholar rate-limits** requests without an API key. When it does, its error is reported in the response and the other 8 databases are still used.
+- **Semantic Scholar rate-limits** requests without an API key: they share one global anonymous quota that is often exhausted. Set `SEMANTIC_SCHOLAR_API_KEY` (see [Installation](#installation)) for a dedicated quota. Without one, its `RATE_LIMITED` error is reported and the other databases are still used.
+- **DBLP currently serves a bot-check page** to all API clients instead of JSON, so DBLP searches fail with an explanatory error until dblp lifts it. The server does not try to get around the check.
+- **Each database is asked for 3× `limit` results** and trimmed back to `limit` after dropping records without a DOI, so a few DOI-less top hits don't empty a source.
 
 ## Tools
 
@@ -95,7 +98,7 @@ All tools are read-only (`readOnlyHint: true`, `destructiveHint: false`, `idempo
 **Returns JSON with:**
 - `verified`: true/false
 - If verified: `confidence` (`high`/`medium`), `source`, `doi`, `doiUrl`, `title`, `authors`, `year`, `journal`, `abstractFromArticle`, `message`
-- If not verified: a warning `message`, plus `possibleMatches` (each with a DOI) when there were near misses
+- If not verified: a warning `message`, plus `possibleMatches` (each with a DOI) when there were near misses, and `errors` (`database`, `code`, `message`) for any database that failed, since it may have held the match
 
 **Example successful verification:**
 ```json
@@ -119,7 +122,7 @@ Verify several citations in one call. Each citation takes the same fields as `ve
 **Input:**
 - `citations` (array): `{ id?, title?, authors?, year?, doi?, journal? }` objects
 
-**Returns:** `summary` (`total`, `verified`, `failed`) and a `results` array, one entry per citation, each with `id`, `verified`, and either `paper` (including `doiUrl`) or a `message`.
+**Returns:** `summary` (`total`, `verified`, `failed`) and a `results` array, one entry per citation, each with `id`, `verified`, and either `paper` (including `doiUrl`) or a `message`. Unverified entries also carry `errors` for any database that failed.
 
 ### findVerifiedPapers
 Search for real papers on a topic and return only papers with DOIs.
@@ -131,7 +134,18 @@ Search for real papers on a topic and return only papers with DOIs.
 - `yearFrom` (number, optional): Minimum publication year
 - `yearTo` (number, optional): Maximum publication year
 
-**Returns:** Up to `limit` papers, deduplicated by DOI, each with `source`, `title`, `authors`, `year`, `journal`, `doi`, and `doiUrl`
+**Returns:** Up to `limit` papers, deduplicated by DOI, each with `source`, `title`, `authors`, `year`, `journal`, `doi`, and `doiUrl`, plus `errors` for any database that failed.
+
+With no papers, it returns `count: 0`, `sourcesQueried`, `errors`, and a `message` that separates "nothing with a DOI matched" from "these databases failed". If every database queried failed, the result is also flagged `isError`:
+
+```json
+{
+  "count": 0,
+  "message": "Every database queried failed, so no papers could be checked: Semantic Scholar (HTTP 429: rate limited (...)).",
+  "sourcesQueried": ["Semantic Scholar"],
+  "errors": [{ "database": "Semantic Scholar", "code": "RATE_LIMITED", "message": "HTTP 429: rate limited (...)" }]
+}
+```
 
 **Example:**
 ```javascript
@@ -183,6 +197,16 @@ Add to your Claude Desktop config file:
 ```
 
 Restart Claude Desktop and the server will be available.
+
+To give Semantic Scholar a dedicated quota, add a free [API key](https://www.semanticscholar.org/product/api#api-key-form) to the server's environment:
+
+```json
+"doi-mcp": {
+  "command": "npx",
+  "args": ["-y", "github:tfscharff/doi-mcp"],
+  "env": { "SEMANTIC_SCHOLAR_API_KEY": "your-key" }
+}
+```
 
 ### Alternative: Global Install
 

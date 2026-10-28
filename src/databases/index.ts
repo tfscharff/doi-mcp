@@ -35,6 +35,9 @@ const adapters = {
 
 type AdapterName = keyof typeof adapters;
 
+// Each source is asked for this many times `limit`, since many top hits have no DOI
+export const OVERFETCH_FACTOR = 3;
+
 export const allDatabases = Object.values(adapters).map(a => ({
   name: a.config.name,
   displayName: a.config.displayName,
@@ -61,7 +64,8 @@ export async function searchMultipleSources(
     sourcesQueried.push(adapter.config.displayName);
 
     try {
-      const searchOptions = { year, yearFrom, yearTo, limit };
+      // Over-fetch so DOI-less top hits don't empty a source; trimmed back to `limit` below
+      const searchOptions = { year, yearFrom, yearTo, limit: limit * OVERFETCH_FACTOR };
       const rawResults = await adapter.search(query, searchOptions);
 
       // Special handling for PubMed DOI fetching
@@ -87,7 +91,7 @@ export async function searchMultipleSources(
 
   // Drop anything without a DOI: this server only returns DOI-backed citations
   for (const papers of allResults) {
-    results.push(...papers.filter((p): p is DoiPaper => !!p?.doi));
+    results.push(...papers.filter((p): p is DoiPaper => !!p?.doi).slice(0, limit));
   }
 
   return { results, errors, sources: sourcesQueried };

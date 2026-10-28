@@ -14,6 +14,33 @@ describe('batchVerifyCitations tool', () => {
     vi.resetAllMocks();
   });
 
+  it('reports failed databases on unverified citations', async () => {
+    // Regression: batch results swallowed per-database failures entirely
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes('crossref')) return ok({ message: { items: [{ title: ['Unrelated'], DOI: '10.1/u' }] } });
+      if (url.includes('openalex')) return Promise.resolve({ ok: false, status: 503, statusText: 'Service Unavailable' });
+      return ok({});
+    });
+
+    const parsed = parse(await batchVerifyCitations({ citations: [{ id: 'weak', title: 'Deep Learning', authors: ['Nobody'] }] }));
+
+    expect(parsed.results[0]).toMatchObject({
+      id: 'weak',
+      verified: false,
+      message: 'Could not confidently verify',
+      errors: [{ database: 'OpenAlex', code: 'API_ERROR', message: 'HTTP 503: Service Unavailable' }],
+    });
+  });
+
+  it('reports failed databases when nothing is found', async () => {
+    mockFetch.mockImplementation(() => Promise.resolve({ ok: false, status: 500, statusText: 'Server Error' }));
+
+    const parsed = parse(await batchVerifyCitations({ citations: [{ id: 'gone', title: 'Anything' }] }));
+
+    expect(parsed.results[0].message).toBe('No matching publications with a DOI found');
+    expect(parsed.results[0].errors).toHaveLength(9);
+  });
+
   it('returns an empty summary for an empty batch', async () => {
     const parsed = parse(await batchVerifyCitations({ citations: [] }));
 

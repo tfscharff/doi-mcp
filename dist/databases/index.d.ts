@@ -7,6 +7,7 @@ interface SearchOptions {
     limit?: number;
     sources?: string[];
 }
+export declare const OVERFETCH_FACTOR = 3;
 export declare const allDatabases: {
     name: string;
     displayName: string;

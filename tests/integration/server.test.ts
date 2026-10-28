@@ -65,11 +65,11 @@ describe('tools', () => {
 
     const result = await client.callTool({ name: 'findVerifiedPapers', arguments: { query: 'nothing' } });
 
-    expect(textOf(result)).toContain('No verified papers found');
+    expect(textOf(result)).toContain('No papers with a DOI found for this query in any database.');
     // source defaults to 'all', so every database is queried
     expect(mockFetch.mock.calls.length).toBeGreaterThanOrEqual(9);
-    // limit defaults to 5
-    expect(mockFetch.mock.calls.some(([url]) => url.includes('rows=5'))).toBe(true);
+    // limit defaults to 5, over-fetched 3x from each source (CrossRef's rows=)
+    expect(mockFetch.mock.calls.some(([url]) => url.includes('rows=15'))).toBe(true);
   });
 
   it('rejects arguments that fail schema validation', async () => {

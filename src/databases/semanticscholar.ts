@@ -1,7 +1,7 @@
 // Semantic Scholar database adapter
 
 import type { NormalizedPaper, DatabaseConfig, DatabaseError } from '../types.js';
-import { fetchJson } from '../http.js';
+import { fetchJson, HttpError } from '../http.js';
 
 export const config: DatabaseConfig = {
   name: 'semanticscholar',
@@ -42,12 +42,20 @@ export async function search(
     url += `&year=-${yearTo}`;
   }
 
+  // Without a key, requests share one global anonymous quota that is often exhausted
+  const apiKey = process.env.SEMANTIC_SCHOLAR_API_KEY;
+  const headers: Record<string, string> = apiKey ? { 'x-api-key': apiKey } : {};
+
   try {
-    const data = await fetchJson<SemanticScholarResponse>(url, { signal });
+    const data = await fetchJson<SemanticScholarResponse>(url, { signal, headers });
     return data.data || [];
   } catch (err) {
     if ((err as Error).name === 'AbortError') {
       throw { code: 'ABORTED', message: 'Request cancelled' } as DatabaseError;
+    }
+    if (err instanceof HttpError && err.status === 429) {
+      const hint = apiKey ? 'the API key\'s quota is exhausted' : 'the shared anonymous quota is exhausted; set SEMANTIC_SCHOLAR_API_KEY for a dedicated quota';
+      throw { code: 'RATE_LIMITED', database: config.displayName, message: `HTTP 429: rate limited (${hint})` } as DatabaseError;
     }
     throw { code: 'API_ERROR', database: config.displayName, message: (err as Error).message } as DatabaseError;
   }

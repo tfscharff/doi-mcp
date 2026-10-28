@@ -27,10 +27,10 @@ describe('eric adapter', () => {
 
       const results = await search('reading fluency', { limit: 4 });
 
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('api.ies.ed.gov/eric/?search=reading%20fluency&rows=4&format=json'),
-        expect.any(Object)
-      );
+      const url = mockFetch.mock.calls[0][0];
+      expect(url).toContain(`api.ies.ed.gov/eric/?search=${encodeURIComponent('(reading fluency) AND url:*doi.org*')}&rows=4&format=json`);
+      // ERIC has no DOI field; it only returns `url` (where DOIs live) when asked
+      expect(url).toMatch(/&fields=[^&]*url/);
       expect(results).toEqual([{ title: 'Reading Fluency' }]);
     });
 
@@ -58,8 +58,8 @@ describe('eric adapter', () => {
       const normalized = normalize({
         title: 'Reading Fluency in Grade 3',
         author: ['Smith, Jane', '', 'Doe, John'],
-        publicationdateyear: '2019',
-        doi: '10.1234/eric',
+        publicationdateyear: 2019,
+        url: 'http://dx.doi.org/10.1234/eric.5(2)',
         source: 'Journal of Education',
       });
 
@@ -68,13 +68,25 @@ describe('eric adapter', () => {
         title: 'Reading Fluency in Grade 3',
         authors: ['Smith, Jane', 'Doe, John'],
         year: 2019,
-        doi: '10.1234/eric',
+        doi: '10.1234/eric.5(2)',
         journal: 'Journal of Education',
       });
     });
 
-    it('falls back to publicationtype for journal', () => {
-      expect(normalize({ publicationtype: 'Reports - Research' }).journal).toBe('Reports - Research');
+    it('reads the DOI from https://doi.org links and accepts a string year', () => {
+      const normalized = normalize({ url: 'https://doi.org/10.5860/crl-236', publicationdateyear: '2001' });
+
+      expect(normalized.doi).toBe('10.5860/crl-236');
+      expect(normalized.year).toBe(2001);
+    });
+
+    it('has no DOI when the url is not a doi.org link', () => {
+      expect(normalize({ url: 'https://files.eric.ed.gov/fulltext/ED1.pdf' }).doi).toBeUndefined();
+    });
+
+    it('falls back to the first publicationtype for journal', () => {
+      expect(normalize({ publicationtype: ['Reports - Research', 'Journal Articles'] }).journal).toBe('Reports - Research');
+      expect(normalize({ publicationtype: 'Books' }).journal).toBe('Books');
     });
 
     it('handles missing fields gracefully', () => {

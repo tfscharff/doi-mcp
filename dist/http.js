@@ -1,5 +1,13 @@
 // Shared HTTP utilities with connection reuse
 const DEFAULT_TIMEOUT = 10000;
+// Non-OK responses throw this, so callers can react to the status (e.g. 429 rate limits)
+export class HttpError extends Error {
+    status;
+    constructor(status, statusText) {
+        super(statusText ? `HTTP ${status}: ${statusText}` : `HTTP ${status}`);
+        this.status = status;
+    }
+}
 export async function fetchJson(url, options = {}) {
     const { headers = {}, signal, timeout = DEFAULT_TIMEOUT } = options;
     // Create timeout signal if not provided
@@ -14,7 +22,11 @@ export async function fetchJson(url, options = {}) {
             signal: signal || controller.signal,
         });
         if (!res.ok) {
-            throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+            throw new HttpError(res.status, res.statusText);
+        }
+        // Bot checks and error pages come back as HTML, sometimes with a 2xx status
+        if (res.headers?.get('content-type')?.includes('text/html')) {
+            throw new Error(`Expected JSON but got an HTML page (HTTP ${res.status}), likely a bot check or outage`);
         }
         return await res.json();
     }
@@ -32,7 +44,7 @@ export async function fetchText(url, options = {}) {
             signal: signal || controller.signal,
         });
         if (!res.ok) {
-            throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+            throw new HttpError(res.status, res.statusText);
         }
         return await res.text();
     }
@@ -54,7 +66,7 @@ export async function fetchWithRedirect(url, options = {}) {
             signal: signal || controller.signal,
         });
         if (!res.ok) {
-            throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+            throw new HttpError(res.status, res.statusText);
         }
         return await res.json();
     }

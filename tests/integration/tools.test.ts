@@ -163,6 +163,6 @@ describe('findVerifiedPapers tool', () => {
 
     const result = await findVerifiedPapers({ query: 'xyznonexistent123' });
 
-    expect(result.content[0].text).toContain('No verified papers found');
+    expect(result.content[0].text).toContain('No papers with a DOI found for this query in any database.');
   });
 });

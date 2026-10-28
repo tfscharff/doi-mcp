@@ -1,3 +1,7 @@
+export declare class HttpError extends Error {
+    status: number;
+    constructor(status: number, statusText: string);
+}
 interface FetchOptions {
     headers?: Record<string, string>;
     signal?: AbortSignal;

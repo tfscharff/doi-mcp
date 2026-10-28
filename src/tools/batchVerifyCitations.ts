@@ -72,12 +72,15 @@ async function verifySingleCitation(citation: BatchCitationInput): Promise<any> 
 
   const query = queryParts.join(' ');
   const searchResults = await searchMultipleSources(query, { year: citation.year });
+  // A database that failed may hold the real match, so unverified results report failures
+  const errors = searchResults.errors.length > 0 ? searchResults.errors : undefined;
 
   if (searchResults.results.length === 0) {
     return {
       id: citationId,
       verified: false,
       message: 'No matching publications with a DOI found',
+      errors,
     };
   }
 
@@ -93,6 +96,7 @@ async function verifySingleCitation(citation: BatchCitationInput): Promise<any> 
         authors: r.authors,
         year: r.year,
       })),
+      errors,
     };
   }
 

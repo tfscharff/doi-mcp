@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { searchMultipleSources, deduplicatePapers, allDatabases } from '../../src/databases/index.js';
+import { searchMultipleSources, deduplicatePapers, allDatabases, OVERFETCH_FACTOR } from '../../src/databases/index.js';
 
 // Mock global fetch
 const mockFetch = vi.fn();
@@ -48,14 +48,33 @@ describe('searchMultipleSources', () => {
     expect(results).toEqual([expect.objectContaining({ source: 'CrossRef', title: 'Only CrossRef' })]);
   });
 
-  it('passes year and limit through to adapters', async () => {
+  it('passes year and an over-fetched limit through to adapters', async () => {
     mockFetch.mockImplementation(empty);
 
     await searchMultipleSources('test', { year: 2020, limit: 7, sources: ['crossref'] });
 
     const url = mockFetch.mock.calls[0][0];
-    expect(url).toContain('rows=7');
+    expect(url).toContain(`rows=${7 * OVERFETCH_FACTOR}`);
     expect(url).toContain('from-pub-date:2020');
+  });
+
+  it('over-fetches so DOI-less top hits do not empty a source, then trims each source to limit', async () => {
+    // Top two hits lack DOIs; a plain limit of 2 would have returned nothing
+    const items = [
+      { title: ['No DOI 1'] },
+      { title: ['No DOI 2'] },
+      { title: ['A'], DOI: '10.1/a' },
+      { title: ['B'], DOI: '10.1/b' },
+      { title: ['C'], DOI: '10.1/c' },
+    ];
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes('crossref')) return ok({ message: { items } });
+      return ok({ results: [{ title: 'OA', doi: 'https://doi.org/10.2/oa' }] });
+    });
+
+    const { results } = await searchMultipleSources('test', { limit: 2, sources: ['crossref', 'openalex'] });
+
+    expect(results.map(r => r.title)).toEqual(['A', 'B', 'OA']);
   });
 
   it('collects per-database errors without failing the whole search', async () => {

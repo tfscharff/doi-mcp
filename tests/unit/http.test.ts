@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { fetchJson, fetchText, fetchWithRedirect } from '../../src/http.js';
+import { fetchJson, fetchText, fetchWithRedirect, HttpError } from '../../src/http.js';
 
 // Mock global fetch
 const mockFetch = vi.fn();
@@ -37,6 +37,31 @@ describe('http', () => {
       mockFetch.mockResolvedValue({ ok: false, status: 404, statusText: 'Not Found' });
 
       await expect(fetchJson('https://example.org')).rejects.toThrow('HTTP 404: Not Found');
+    });
+
+    it('throws an HttpError carrying the status, without a dangling colon when statusText is empty', async () => {
+      mockFetch.mockResolvedValue({ ok: false, status: 429, statusText: '' });
+
+      const err = await fetchJson('https://example.org').catch(e => e);
+
+      expect(err).toBeInstanceOf(HttpError);
+      expect(err.status).toBe(429);
+      expect(err.message).toBe('HTTP 429');
+    });
+
+    it('rejects an HTML page (e.g. a bot check) instead of failing to parse it', async () => {
+      // Regression: DBLP answers HTTP 202 with an HTML "Making sure you're not a bot!" page
+      const json = vi.fn();
+      mockFetch.mockResolvedValue({ ok: true, status: 202, headers: new Headers({ 'content-type': 'text/html; charset=utf-8' }), json });
+
+      await expect(fetchJson('https://example.org')).rejects.toThrow('Expected JSON but got an HTML page (HTTP 202)');
+      expect(json).not.toHaveBeenCalled();
+    });
+
+    it('parses JSON when the content-type is JSON', async () => {
+      mockFetch.mockResolvedValue({ ok: true, headers: new Headers({ 'content-type': 'application/json' }), json: () => Promise.resolve([1]) });
+
+      expect(await fetchJson('https://example.org')).toEqual([1]);
     });
 
     it('aborts after the timeout', async () => {

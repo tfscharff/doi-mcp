@@ -3,10 +3,10 @@ export declare const config: DatabaseConfig;
 interface ERICDoc {
     title?: string;
     author?: string[];
-    publicationdateyear?: string;
-    doi?: string;
+    publicationdateyear?: number | string;
     source?: string;
-    publicationtype?: string;
+    publicationtype?: string | string[];
+    url?: string;
 }
 export declare function search(query: string, options?: {
     limit?: number;

@@ -1,4 +1,4 @@
-// zbMATH database adapter (mathematics)
+// zbMATH Open database adapter (mathematics)
 import { fetchJson } from '../http.js';
 export const config = {
     name: 'zbmath',
@@ -8,10 +8,9 @@ export const config = {
 };
 export async function search(query, options = {}) {
     const { year, limit = 3, signal } = options;
-    let url = `${config.baseUrl}/document/_structured_search?query=${encodeURIComponent(query)}&results_per_page=${limit}`;
-    if (year) {
-        url += `&year=${year}`;
-    }
+    // zbMATH query language: `py:` filters by publication year
+    const searchString = year ? `${query} py:${year}` : query;
+    const url = `${config.baseUrl}/v1/document/_search?search_string=${encodeURIComponent(searchString)}&page=0&results_per_page=${limit}`;
     try {
         const data = await fetchJson(url, { signal });
         return data.result || [];
@@ -24,13 +23,12 @@ export async function search(query, options = {}) {
     }
 }
 export function normalize(result) {
-    const authors = result.authors?.map(a => (typeof a === 'string' ? a : a.name || '')).filter(Boolean);
     return {
         source: config.displayName,
-        title: result.title,
-        authors,
-        year: result.year || result.publication_year,
-        doi: result.doi,
-        journal: result.source || result.journal,
+        title: result.title?.title || undefined,
+        authors: result.contributors?.authors?.map(a => a.name).filter((n) => !!n),
+        year: result.year ? parseInt(result.year) : undefined,
+        doi: result.links?.find(l => l.type === 'doi')?.identifier,
+        journal: result.source?.series?.[0]?.title || result.source?.source,
     };
 }

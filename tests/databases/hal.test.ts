@@ -38,6 +38,18 @@ describe('hal adapter', () => {
       expect(results).toHaveLength(1);
     });
 
+    it('asks only for records with a DOI and names the fields to return', async () => {
+      // Regression: without `fl`, HAL returned only docid/label_s, so no result ever had a DOI
+      mockDocs([]);
+
+      await search('test');
+
+      const url = mockFetch.mock.calls[0][0];
+      expect(url).toContain('&fq=doiId_s:*');
+      expect(url).toMatch(/&fl=[^&]*doiId_s/);
+      expect(url).toMatch(/&fl=[^&]*title_s/);
+    });
+
     it.each([
       [{ year: 2020 }, 'fq=publicationDateY_i:2020'],
       [{ yearFrom: 2015, yearTo: 2020 }, 'fq=publicationDateY_i:[2015 TO 2020]'],

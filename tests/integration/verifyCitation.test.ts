@@ -90,6 +90,21 @@ describe('verifyCitation tool (scoring paths)', () => {
     expect(parsed.possibleMatches).toEqual([
       expect.objectContaining({ title: 'Something Else Entirely', doiUrl: 'https://doi.org/10.1/other' }),
     ]);
+    expect(parsed.errors).toBeUndefined();
+  });
+
+  it('reports failed databases when it cannot confidently verify, since one may hold the match', async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url.startsWith('https://doi.org/')) return notFound();
+      if (url.includes('crossref')) return ok({ message: { items: [{ title: ['Something Else Entirely'], DOI: '10.1/other' }] } });
+      if (url.includes('openalex')) return Promise.resolve({ ok: false, status: 503, statusText: 'Service Unavailable' });
+      return ok({});
+    });
+
+    const parsed = parse(await verifyCitation({ title: 'Deep Learning', authors: ['Nobody'] }));
+
+    expect(parsed.verified).toBe(false);
+    expect(parsed.errors).toEqual([{ database: 'OpenAlex', code: 'API_ERROR', message: 'HTTP 503: Service Unavailable' }]);
   });
 
   it('does not verify a fabricated citation whose only match is the year', async () => {

@@ -22,6 +22,8 @@ interface HALDoc {
   en_abstract_s?: string[];
 }
 
+const FIELDS = 'title_s,en_title_s,authFullName_s,publicationDateY_i,doiId_s,journalTitle_s,bookTitle_s,abstract_s,en_abstract_s';
+
 interface HALResponse {
   response?: { docs?: HALDoc[] };
 }
@@ -32,7 +34,8 @@ export async function search(
 ): Promise<HALDoc[]> {
   const { year, yearFrom, yearTo, limit = 3, signal } = options;
 
-  let url = `${config.baseUrl}/?q=${encodeURIComponent(query)}&wt=json&rows=${limit}`;
+  // Without `fl`, HAL returns only docid/label_s; fq keeps the search to records with a DOI
+  let url = `${config.baseUrl}/?q=${encodeURIComponent(query)}&wt=json&rows=${limit}&fq=doiId_s:*&fl=${FIELDS}`;
 
   if (year) {
     url += `&fq=publicationDateY_i:${year}`;

@@ -2,6 +2,16 @@
 
 const DEFAULT_TIMEOUT = 10000;
 
+// Non-OK responses throw this, so callers can react to the status (e.g. 429 rate limits)
+export class HttpError extends Error {
+  status: number;
+
+  constructor(status: number, statusText: string) {
+    super(statusText ? `HTTP ${status}: ${statusText}` : `HTTP ${status}`);
+    this.status = status;
+  }
+}
+
 interface FetchOptions {
   headers?: Record<string, string>;
   signal?: AbortSignal;
@@ -25,7 +35,11 @@ export async function fetchJson<T>(url: string, options: FetchOptions = {}): Pro
     });
 
     if (!res.ok) {
-      throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      throw new HttpError(res.status, res.statusText);
+    }
+    // Bot checks and error pages come back as HTML, sometimes with a 2xx status
+    if (res.headers?.get('content-type')?.includes('text/html')) {
+      throw new Error(`Expected JSON but got an HTML page (HTTP ${res.status}), likely a bot check or outage`);
     }
 
     return await res.json() as T;
@@ -47,7 +61,7 @@ export async function fetchText(url: string, options: FetchOptions = {}): Promis
     });
 
     if (!res.ok) {
-      throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      throw new HttpError(res.status, res.statusText);
     }
 
     return await res.text();
@@ -76,7 +90,7 @@ export async function fetchWithRedirect<T>(
     });
 
     if (!res.ok) {
-      throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      throw new HttpError(res.status, res.statusText);
     }
 
     return await res.json() as T;

@@ -53,11 +53,14 @@ async function verifySingleCitation(citation) {
     }
     const query = queryParts.join(' ');
     const searchResults = await searchMultipleSources(query, { year: citation.year });
+    // A database that failed may hold the real match, so unverified results report failures
+    const errors = searchResults.errors.length > 0 ? searchResults.errors : undefined;
     if (searchResults.results.length === 0) {
         return {
             id: citationId,
             verified: false,
             message: 'No matching publications with a DOI found',
+            errors,
         };
     }
     const { match: bestMatch, score: bestScore } = findBestMatch(searchResults.results, citation);
@@ -71,6 +74,7 @@ async function verifySingleCitation(citation) {
                 authors: r.authors,
                 year: r.year,
             })),
+            errors,
         };
     }
     return {

@@ -12,7 +12,7 @@ export type DoiPaper = NormalizedPaper & {
 };
 export interface DatabaseError {
     database: string;
-    code: 'TIMEOUT' | 'PARSE_ERROR' | 'API_ERROR' | 'NETWORK' | 'ABORTED';
+    code: 'TIMEOUT' | 'PARSE_ERROR' | 'API_ERROR' | 'NETWORK' | 'ABORTED' | 'RATE_LIMITED';
     message: string;
 }
 export interface SearchResults {

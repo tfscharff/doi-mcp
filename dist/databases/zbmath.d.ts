@@ -1,15 +1,26 @@
 import type { NormalizedPaper, DatabaseConfig } from '../types.js';
 export declare const config: DatabaseConfig;
 interface ZbMathResult {
-    title?: string;
-    authors?: Array<{
-        name?: string;
-    } | string>;
-    year?: number;
-    publication_year?: number;
-    doi?: string;
-    source?: string;
-    journal?: string;
+    title?: {
+        title?: string | null;
+        subtitle?: string | null;
+    };
+    contributors?: {
+        authors?: Array<{
+            name?: string;
+        }>;
+    };
+    year?: string;
+    links?: Array<{
+        type?: string;
+        identifier?: string;
+    }>;
+    source?: {
+        series?: Array<{
+            title?: string;
+        }>;
+        source?: string;
+    };
 }
 export declare function search(query: string, options?: {
     year?: number;

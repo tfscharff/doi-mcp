@@ -21,7 +21,8 @@ export async function search(query, options = {}) {
     else if (yearTo) {
         searchQuery = `${query} and date --${yearTo}`;
     }
-    const url = `${config.baseUrl}?q=${encodeURIComponent(searchQuery)}&size=${limit}&sort=mostrecent`;
+    // Default sort is relevance; `mostrecent` surfaced fresh preprints that have no DOI yet
+    const url = `${config.baseUrl}?q=${encodeURIComponent(searchQuery)}&size=${limit}`;
     try {
         const data = await fetchJson(url, { signal });
         return data.hits?.hits || [];

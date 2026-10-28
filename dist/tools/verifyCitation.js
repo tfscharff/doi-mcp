@@ -95,6 +95,8 @@ export async function verifyCitation(input) {
                     doi: r.doi,
                     doiUrl: `https://doi.org/${r.doi}`,
                 })),
+                // A database that failed may hold the real match
+                errors: searchResults.errors.length > 0 ? searchResults.errors : undefined,
             };
             return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
         }
