@@ -5,7 +5,6 @@ import * as crossref from './crossref.js';
 import * as openalex from './openalex.js';
 import * as pubmed from './pubmed.js';
 import * as semanticscholar from './semanticscholar.js';
-import * as dblp from './dblp.js';
 import * as zbmath from './zbmath.js';
 import * as eric from './eric.js';
 import * as hal from './hal.js';
@@ -26,7 +25,6 @@ const adapters = {
   openalex,
   pubmed,
   semanticscholar,
-  dblp,
   zbmath,
   eric,
   hal,

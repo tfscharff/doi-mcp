@@ -1,5 +1,6 @@
 import type { NormalizedPaper, DatabaseConfig } from '../types.js';
 export declare const config: DatabaseConfig;
+export declare const RETRY_DELAY_MS = 1000;
 interface SemanticScholarPaper {
     paperId?: string;
     title?: string;

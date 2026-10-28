@@ -101,7 +101,7 @@ describe('findVerifiedPapers tool (database errors)', () => {
     expect(parsed.message).toMatch(/^No papers with a DOI found in the databases that responded\. These failed: /);
     expect(parsed.message).toContain('OpenAlex (HTTP 503: Service Unavailable)');
     expect(parsed.errors.map((e: any) => e.database)).not.toContain('CrossRef');
-    expect(parsed.sourcesQueried).toHaveLength(9);
+    expect(parsed.sourcesQueried).toHaveLength(8);
   });
 
   it('reports a plain no-results message without errors when every database answered', async () => {

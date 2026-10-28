@@ -136,7 +136,7 @@ describe('verifyCitation tool (scoring paths)', () => {
 
     expect(parsed.verified).toBe(false);
     expect(parsed.errors.length).toBeGreaterThan(0);
-    expect(parsed.searchedSources).toHaveLength(9);
+    expect(parsed.searchedSources).toHaveLength(8);
   });
 
   it('does not cache unverified results', async () => {

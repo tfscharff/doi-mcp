@@ -3,6 +3,14 @@
 All notable changes to doi-mcp. Every change to `main` is a release, written by `npm run ship`
 ([Semantic Versioning](https://semver.org/), [Conventional Commits](https://www.conventionalcommits.org/)).
 
+## [7.0.0] - 2026-10-28
+
+- **feat!:** remove DBLP and retry rate-limited Semantic Scholar requests
+
+BREAKING CHANGE: DBLP is removed. `"dblp"` is no longer a valid `source` for `findVerifiedPapers`, and searches cover 8 databases. dblp.org serves a bot-check page to API clients instead of JSON, so every DBLP search failed and added an error to every response. Computer-science papers with DOIs are still found through CrossRef and OpenAlex.
+
+Semantic Scholar: a 429 on a request without an API key is now retried once after one second, since the shared anonymous quota is often only briefly full. If the retry is also limited, the `RATE_LIMITED` error is reported as before. Requests with `SEMANTIC_SCHOLAR_API_KEY` are not retried.
+
 ## [6.0.0] - 2026-10-28
 
 - **feat!:** report database failures and fix broken adapters

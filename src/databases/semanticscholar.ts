@@ -10,6 +10,9 @@ export const config: DatabaseConfig = {
   coverage: '200+ million papers',
 };
 
+// Wait before the single retry of a keyless request that hit the shared 429 limit
+export const RETRY_DELAY_MS = 1000;
+
 interface SemanticScholarPaper {
   paperId?: string;
   title?: string;
@@ -46,8 +49,18 @@ export async function search(
   const apiKey = process.env.SEMANTIC_SCHOLAR_API_KEY;
   const headers: Record<string, string> = apiKey ? { 'x-api-key': apiKey } : {};
 
+  const request = () => fetchJson<SemanticScholarResponse>(url, { signal, headers });
+
   try {
-    const data = await fetchJson<SemanticScholarResponse>(url, { signal, headers });
+    let data: SemanticScholarResponse;
+    try {
+      data = await request();
+    } catch (err) {
+      // The anonymous pool is often only momentarily full, so wait once and retry
+      if (apiKey || !(err instanceof HttpError && err.status === 429)) throw err;
+      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
+      data = await request();
+    }
     return data.data || [];
   } catch (err) {
     if ((err as Error).name === 'AbortError') {

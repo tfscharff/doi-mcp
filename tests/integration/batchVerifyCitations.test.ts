@@ -38,7 +38,7 @@ describe('batchVerifyCitations tool', () => {
     const parsed = parse(await batchVerifyCitations({ citations: [{ id: 'gone', title: 'Anything' }] }));
 
     expect(parsed.results[0].message).toBe('No matching publications with a DOI found');
-    expect(parsed.results[0].errors).toHaveLength(9);
+    expect(parsed.results[0].errors).toHaveLength(8);
   });
 
   it('returns an empty summary for an empty batch', async () => {

@@ -67,7 +67,7 @@ describe('tools', () => {
 
     expect(textOf(result)).toContain('No papers with a DOI found for this query in any database.');
     // source defaults to 'all', so every database is queried
-    expect(mockFetch.mock.calls.length).toBeGreaterThanOrEqual(9);
+    expect(mockFetch.mock.calls.length).toBeGreaterThanOrEqual(8);
     // limit defaults to 5, over-fetched 3x from each source (CrossRef's rows=)
     expect(mockFetch.mock.calls.some(([url]) => url.includes('rows=15'))).toBe(true);
   });
@@ -98,7 +98,7 @@ describe('resources', () => {
     const data = JSON.parse(contents[0].text as string);
 
     expect(contents[0].mimeType).toBe('application/json');
-    expect(data.databases).toHaveLength(9);
+    expect(data.databases).toHaveLength(8);
     expect(data.databases[0]).toEqual(expect.objectContaining({ name: 'CrossRef', url: 'https://api.crossref.org' }));
   });
 

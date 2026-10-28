@@ -10,10 +10,10 @@ const okText = (text: string) => Promise.resolve({ ok: true, text: () => Promise
 const empty = () => ok({});
 
 describe('allDatabases', () => {
-  it('lists all 9 databases with metadata', () => {
-    expect(allDatabases).toHaveLength(9);
+  it('lists all 8 databases with metadata', () => {
+    expect(allDatabases).toHaveLength(8);
     expect(allDatabases.map(d => d.name)).toEqual([
-      'crossref', 'openalex', 'pubmed', 'semanticscholar', 'dblp', 'zbmath', 'eric', 'hal', 'inspirehep',
+      'crossref', 'openalex', 'pubmed', 'semanticscholar', 'zbmath', 'eric', 'hal', 'inspirehep',
     ]);
     for (const db of allDatabases) {
       expect(db.displayName).toBeTruthy();
@@ -152,11 +152,11 @@ describe('searchMultipleSources (DOI-only scope)', () => {
   it('drops results that have no DOI', async () => {
     mockFetch.mockImplementation((url: string) => {
       if (url.includes('crossref')) return ok({ message: { items: [{ title: ['Has DOI'], DOI: '10.1/yes' }, { title: ['No DOI'] }] } });
-      if (url.includes('dblp')) return ok({ result: { hits: { hit: [{ info: { title: 'DBLP no DOI' } }] } } });
+      if (url.includes('openalex')) return ok({ results: [{ title: 'OpenAlex no DOI' }] });
       return empty();
     });
 
-    const { results } = await searchMultipleSources('test', { sources: ['crossref', 'dblp'] });
+    const { results } = await searchMultipleSources('test', { sources: ['crossref', 'openalex'] });
 
     expect(results.map(r => r.title)).toEqual(['Has DOI']);
   });

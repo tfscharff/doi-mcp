@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { search, normalize, config } from '../../src/databases/semanticscholar.js';
+import { search, normalize, config, RETRY_DELAY_MS } from '../../src/databases/semanticscholar.js';
 
 // Mock global fetch
 const mockFetch = vi.fn();
@@ -63,29 +63,62 @@ describe('semanticscholar adapter', () => {
     });
 
     describe('rate limits and API key', () => {
+      const rateLimited = { ok: false, status: 429, statusText: '' };
+
+      beforeEach(() => {
+        vi.useFakeTimers();
+      });
+
       afterEach(() => {
+        vi.useRealTimers();
         delete process.env.SEMANTIC_SCHOLAR_API_KEY;
       });
 
-      it('throws RATE_LIMITED on 429 with a hint to set an API key', async () => {
-        mockFetch.mockResolvedValue({ ok: false, status: 429, statusText: '' });
+      it('retries a keyless 429 once after a delay and returns the retry\'s results', async () => {
+        mockFetch
+          .mockResolvedValueOnce(rateLimited)
+          .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ data: [{ title: 'Second try' }] }) });
 
-        await expect(search('test')).rejects.toMatchObject({
+        const pending = search('test');
+        await vi.advanceTimersByTimeAsync(RETRY_DELAY_MS - 1);
+        expect(mockFetch).toHaveBeenCalledTimes(1);
+        await vi.advanceTimersByTimeAsync(1);
+
+        expect(await pending).toEqual([{ title: 'Second try' }]);
+        expect(mockFetch).toHaveBeenCalledTimes(2);
+      });
+
+      it('throws RATE_LIMITED with a hint to set an API key when the retry is also limited', async () => {
+        mockFetch.mockResolvedValue(rateLimited);
+
+        const pending = expect(search('test')).rejects.toMatchObject({
           code: 'RATE_LIMITED',
           database: 'Semantic Scholar',
           message: expect.stringContaining('set SEMANTIC_SCHOLAR_API_KEY'),
         });
+        await vi.advanceTimersByTimeAsync(RETRY_DELAY_MS);
+        await pending;
+
+        expect(mockFetch).toHaveBeenCalledTimes(2);
         expect(mockFetch.mock.calls[0][1].headers).not.toHaveProperty('x-api-key');
       });
 
-      it('sends SEMANTIC_SCHOLAR_API_KEY as x-api-key when set', async () => {
+      it('does not retry errors other than 429', async () => {
+        mockFetch.mockResolvedValue({ ok: false, status: 503, statusText: 'Service Unavailable' });
+
+        await expect(search('test')).rejects.toMatchObject({ code: 'API_ERROR' });
+        expect(mockFetch).toHaveBeenCalledTimes(1);
+      });
+
+      it('sends SEMANTIC_SCHOLAR_API_KEY as x-api-key and does not retry a keyed 429', async () => {
         process.env.SEMANTIC_SCHOLAR_API_KEY = 'k123';
-        mockFetch.mockResolvedValue({ ok: false, status: 429, statusText: '' });
+        mockFetch.mockResolvedValue(rateLimited);
 
         await expect(search('test')).rejects.toMatchObject({
           code: 'RATE_LIMITED',
           message: expect.stringContaining("the API key's quota is exhausted"),
         });
+        expect(mockFetch).toHaveBeenCalledTimes(1);
         expect(mockFetch.mock.calls[0][1].headers['x-api-key']).toBe('k123');
       });
     });

@@ -23,7 +23,7 @@ export function createServer() {
   server.registerTool(
     'verifyCitation',
     {
-      description: 'CRITICAL: Use this to verify ANY academic citation before mentioning it. Checks multiple databases (CrossRef, OpenAlex, PubMed, zbMATH, ERIC, HAL, INSPIRE-HEP, Semantic Scholar, DBLP) if a paper exists. Only papers with a DOI count as verified; every verified result includes a doiUrl.',
+      description: 'CRITICAL: Use this to verify ANY academic citation before mentioning it. Checks multiple databases (CrossRef, OpenAlex, PubMed, zbMATH, ERIC, HAL, INSPIRE-HEP, Semantic Scholar) if a paper exists. Only papers with a DOI count as verified; every verified result includes a doiUrl.',
       inputSchema: {
         title: z.string().optional().describe('Paper title (partial matches accepted)'),
         authors: z.array(z.string()).optional().describe('Author names (last names sufficient)'),
@@ -70,13 +70,13 @@ export function createServer() {
   server.registerTool(
     'findVerifiedPapers',
     {
-      description: 'Search multiple academic databases (CrossRef, OpenAlex, PubMed, zbMATH, ERIC, HAL, INSPIRE-HEP, Semantic Scholar, DBLP) for papers and return only verified, real citations with DOIs.',
+      description: 'Search multiple academic databases (CrossRef, OpenAlex, PubMed, zbMATH, ERIC, HAL, INSPIRE-HEP, Semantic Scholar) for papers and return only verified, real citations with DOIs.',
       inputSchema: {
         query: z.string().describe('Search query (topic, keywords, author names)'),
         limit: z.number().min(1).max(20).default(5).describe('Number of results per source'),
         yearFrom: z.number().optional().describe('Minimum publication year'),
         yearTo: z.number().optional().describe('Maximum publication year'),
-        source: z.enum(['all', 'crossref', 'openalex', 'pubmed', 'zbmath', 'eric', 'hal', 'inspirehep', 'semanticscholar', 'dblp']).default('all').describe('Which source to search'),
+        source: z.enum(['all', 'crossref', 'openalex', 'pubmed', 'zbmath', 'eric', 'hal', 'inspirehep', 'semanticscholar']).default('all').describe('Which source to search'),
       },
       annotations: {
         readOnlyHint: true,

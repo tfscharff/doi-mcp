@@ -50,7 +50,7 @@ describe('http', () => {
     });
 
     it('rejects an HTML page (e.g. a bot check) instead of failing to parse it', async () => {
-      // Regression: DBLP answers HTTP 202 with an HTML "Making sure you're not a bot!" page
+      // Regression: DBLP (since removed) answered HTTP 202 with an HTML "Making sure you're not a bot!" page
       const json = vi.fn();
       mockFetch.mockResolvedValue({ ok: true, status: 202, headers: new Headers({ 'content-type': 'text/html; charset=utf-8' }), json });
 

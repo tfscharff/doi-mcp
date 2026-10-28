@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-MCP server (stdio) that prevents citation hallucination by verifying academic citations against 9 databases: CrossRef, OpenAlex, PubMed, zbMATH, ERIC, HAL, INSPIRE-HEP, Semantic Scholar, DBLP. ESM TypeScript, Zod 4 for tool input schemas. Runtime supports Node >=18, but development needs Node >=22.12 (vitest 5).
+MCP server (stdio) that prevents citation hallucination by verifying academic citations against 8 databases: CrossRef, OpenAlex, PubMed, zbMATH, ERIC, HAL, INSPIRE-HEP, Semantic Scholar. ESM TypeScript, Zod 4 for tool input schemas. Runtime supports Node >=18, but development needs Node >=22.12 (vitest 5).
 
 ## Commands
 
@@ -56,8 +56,8 @@ Request flow: `index.ts` (stdio transport) → `server.ts` (`createServer()` reg
 - **HAL** returns only `docid`/`label_s` unless `fl=` names the fields.
 - **zbMATH** uses `/v1/document/_search?search_string=` (the old `_structured_search?query=` returns 400); DOIs are in `links[]` with `type: 'doi'`; year filter is `py:YYYY` in the query.
 - **INSPIRE-HEP**: don't sort by `mostrecent`; new preprints have no DOI yet.
-- **Semantic Scholar** 429s on the shared anonymous quota; `SEMANTIC_SCHOLAR_API_KEY` is sent as `x-api-key`.
-- **DBLP** serves an Anubis "not a bot" HTML page (HTTP 202) to all API clients. Don't try to solve or evade the challenge; it fails with an explanatory error.
+- **Semantic Scholar** 429s on the shared anonymous quota; `SEMANTIC_SCHOLAR_API_KEY` is sent as `x-api-key`. A keyless 429 is retried once after `RETRY_DELAY_MS` (1s); a keyed one is not.
+- **DBLP** was removed (7.0.0): it serves an Anubis "not a bot" HTML page (HTTP 202) to all API clients. Do not re-add it with a workaround for the challenge.
 
 To check adapters live, call the built `dist/databases/<name>.js` `search()`/`normalize()` directly (tests never hit the network).
 - **`cache.ts`** — module-global `Map`, 5-min TTL, 100 entries, evicts oldest *inserted* (FIFO, not true LRU). Only successful verifications are cached. Call `cache.clear()` between tests that hit the same keys.

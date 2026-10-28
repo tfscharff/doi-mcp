@@ -5,7 +5,7 @@
 <h1 align="center">DOI Citation Verifier MCP Server</h1>
 
 <p align="center">
-  A Model Context Protocol (MCP) server that <strong>prevents citation hallucination</strong> by verifying academic citations against <strong>9 authoritative databases</strong>. Only papers with a DOI are ever verified or returned, so every citation it gives an AI assistant comes with a working <code>https://doi.org/</code> link.
+  A Model Context Protocol (MCP) server that <strong>prevents citation hallucination</strong> by verifying academic citations against <strong>8 authoritative databases</strong>. Only papers with a DOI are ever verified or returned, so every citation it gives an AI assistant comes with a working <code>https://doi.org/</code> link.
 </p>
 
 ## 🚀 Quick Install
@@ -26,20 +26,20 @@ Or add to your Claude Desktop config:
 }
 ```
 
-To pin a release, append its tag: `github:tfscharff/doi-mcp#v6.0.0`. See [Releases](#releases).
+To pin a release, append its tag: `github:tfscharff/doi-mcp#v7.0.0`. See [Releases](#releases).
 
 ## The Problem This Solves
 
 Large language models sometimes "hallucinate" academic citations - citing papers that don't exist, misattributing real titles to wrong authors, or mixing up publication details. This MCP server eliminates that problem by:
 
-1. **9-database verification**: Checks citations across CrossRef, OpenAlex, PubMed, zbMATH, ERIC, HAL, INSPIRE-HEP, Semantic Scholar, and DBLP
+1. **8-database verification**: Checks citations across CrossRef, OpenAlex, PubMed, zbMATH, ERIC, HAL, INSPIRE-HEP, and Semantic Scholar
 2. **Parallel search**: Queries all databases simultaneously
 3. **Comprehensive coverage**: 600+ million publications across all disciplines including STEM, humanities, social sciences, and education
 4. **DOI-only results**: A paper counts only if a database returns a DOI for it. Every verified citation, possible match, and search result includes a DOI.
 
 ## Features
 
-- **9 Database Search**: CrossRef, OpenAlex, PubMed, zbMATH, ERIC, HAL, INSPIRE-HEP, Semantic Scholar, DBLP
+- **8 Database Search**: CrossRef, OpenAlex, PubMed, zbMATH, ERIC, HAL, INSPIRE-HEP, Semantic Scholar
 - **Verify Citations**: Check if a paper with specific details actually exists, one at a time or in batches
 - **Find Verified Papers**: Search for real papers on a topic and get only DOI-backed results
 - **Strict matching**: A candidate must match the citation's title or an author; a matching year alone never verifies anything
@@ -48,14 +48,14 @@ Large language models sometimes "hallucinate" academic citations - citing papers
 - **Source Selection**: Search all databases or target specific sources
 - **Zero Configuration**: No API keys required (an optional Semantic Scholar key avoids its shared rate limit)
 - **Failures are reported, not hidden**: When a database errors or rate-limits, responses name it and say why, so a failed lookup is never mistaken for "no such paper"
-- **Fully Tested**: 100% line coverage across scoring, caching, HTTP, all 9 database adapters, the tools, and the MCP server itself
+- **Fully Tested**: 100% line coverage across scoring, caching, HTTP, all 8 database adapters, the tools, and the MCP server itself
 
 ## How It Works
 
 When an AI assistant is asked about research or for citations:
 
 1. **Without this MCP**: The assistant might cite "According to Smith et al. (2023) in Nature..." referencing a paper that doesn't exist
-2. **With this MCP**: The assistant uses `verifyCitation` first, which searches across 9 databases in parallel and returns:
+2. **With this MCP**: The assistant uses `verifyCitation` first, which searches across 8 databases in parallel and returns:
    - Verified match with a DOI → Can be cited
    - No DOI-backed match found → Cannot cite; must search for real papers instead
 
@@ -76,9 +76,9 @@ A candidate is only considered if it has a DOI **and** matches on title or at le
 ### Limitations
 
 - **Papers without a DOI can't be verified.** Some real papers, such as conference proceedings that never received a DOI, will come back `verified: false`. This is deliberate: the server only vouches for citations it can link to.
-- **Speed depends on the slowest database.** Most lookups take one to a few seconds; title/author searches wait for all 9 databases.
-- **Semantic Scholar rate-limits** requests without an API key: they share one global anonymous quota that is often exhausted. Set `SEMANTIC_SCHOLAR_API_KEY` (see [Installation](#installation)) for a dedicated quota. Without one, its `RATE_LIMITED` error is reported and the other databases are still used.
-- **DBLP currently serves a bot-check page** to all API clients instead of JSON, so DBLP searches fail with an explanatory error until dblp lifts it. The server does not try to get around the check.
+- **Speed depends on the slowest database.** Most lookups take one to a few seconds; title/author searches wait for all 8 databases.
+- **Semantic Scholar rate-limits** requests without an API key: they share one global anonymous quota that is often exhausted. Set `SEMANTIC_SCHOLAR_API_KEY` (see [Installation](#installation)) for a dedicated quota. Without one, a 429 is retried once after a second; if that is also limited, its `RATE_LIMITED` error is reported and the other databases are still used.
+- **DBLP was removed in 7.0.0.** dblp.org serves a bot-check page to API clients instead of JSON. Computer-science papers with DOIs are still found through CrossRef and OpenAlex.
 - **Each database is asked for 3× `limit` results** and trimmed back to `limit` after dropping records without a DOI, so a few DOI-less top hits don't empty a source.
 
 ## Tools
@@ -129,7 +129,7 @@ Search for real papers on a topic and return only papers with DOIs.
 
 **Input:**
 - `query` (string): Search query (topic, keywords, author names)
-- `source` (string, optional): Which database to search - "all" (default), "crossref", "openalex", "pubmed", "zbmath", "eric", "hal", "inspirehep", "semanticscholar", or "dblp"
+- `source` (string, optional): Which database to search - "all" (default), "crossref", "openalex", "pubmed", "zbmath", "eric", "hal", "inspirehep", or "semanticscholar"
 - `limit` (number, optional): Number of results per source (1-20, default: 5)
 - `yearFrom` (number, optional): Minimum publication year
 - `yearTo` (number, optional): Maximum publication year
@@ -149,7 +149,7 @@ With no papers, it returns `count: 0`, `sourcesQueried`, `errors`, and a `messag
 
 **Example:**
 ```javascript
-// Search all 9 databases
+// Search all 8 databases
 findVerifiedPapers({ query: "CRISPR gene editing", limit: 5 })
 
 // Search only PubMed for biomedical papers
@@ -157,9 +157,6 @@ findVerifiedPapers({ query: "cancer immunotherapy", source: "pubmed", limit: 10 
 
 // Search zbMATH for mathematics papers
 findVerifiedPapers({ query: "algebraic topology", source: "zbmath" })
-
-// Search DBLP for computer science papers
-findVerifiedPapers({ query: "neural networks", source: "dblp", yearFrom: 2020 })
 
 // Search ERIC for education research
 findVerifiedPapers({ query: "active learning pedagogy", source: "eric" })
@@ -173,7 +170,7 @@ findVerifiedPapers({ query: "Higgs boson", source: "inspirehep" })
 
 ### Resources and prompt
 
-- `citation://databases` (JSON): the 9 databases with coverage and API URLs
+- `citation://databases` (JSON): the 8 databases with coverage and API URLs
 - `citation://guidelines` (Markdown): when and how to use each tool
 - `citation-verification-rules` (prompt): rules that tell the assistant to verify before citing and to cite only with a DOI
 
@@ -321,7 +318,7 @@ src/
     ├── crossref.ts
     ├── openalex.ts
     ├── pubmed.ts
-    └── ... (9 adapters total)
+    └── ... (8 adapters total)
 ```
 
 **Adding a new database:**
@@ -351,9 +348,9 @@ Assistant: [Uses findVerifiedPapers tool]
 **Verification catches fake citations:**
 ```
 User: "Can you verify this citation: Smith et al. (2024), 'Quantum AI', Nature"
-Assistant: [Uses verifyCitation tool - searches all 9 databases in parallel]
+Assistant: [Uses verifyCitation tool - searches all 8 databases in parallel]
            "⚠ I cannot verify this citation - no matching publication with a DOI
-            was found in any of the 9 databases. This citation may be incorrect."
+            was found in any of the 8 databases. This citation may be incorrect."
 ```
 
 ## Database Coverage
@@ -368,7 +365,6 @@ All databases are queried in parallel:
 ### Specialized Databases
 - **PubMed**: 35+ million biomedical and life sciences publications
 - **zbMATH**: 4+ million mathematics publications
-- **DBLP**: Comprehensive computer science bibliography (journals and conferences)
 - **ERIC**: 1.7+ million education research publications
 - **HAL**: 4.4+ million French/European scholarly documents (2.5M English)
 - **INSPIRE-HEP**: 1.7+ million high-energy physics publications
@@ -395,7 +391,6 @@ Contributions are welcome! Please feel free to submit issues or pull requests.
 - [HAL API](https://api.archives-ouvertes.fr/docs/)
 - [INSPIRE-HEP API](https://github.com/inspirehep/rest-api-doc)
 - [Semantic Scholar API](https://www.semanticscholar.org/product/api)
-- [DBLP API](https://dblp.org/faq/How+to+use+the+dblp+search+API.html)
 
 ### Resources
 - [DOI Handbook](https://www.doi.org/the-identifier/resources/handbook)
