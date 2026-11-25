@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calculateMatchScore, findBestMatch } from '../../src/scoring.js';
+import { calculateMatchScore, findBestMatch, hasIdentityMatch } from '../../src/scoring.js';
 import type { NormalizedPaper } from '../../src/types.js';
 
 describe('calculateMatchScore', () => {
@@ -77,6 +77,17 @@ describe('calculateMatchScore', () => {
       authors: ['Williams'],
     });
     expect(score).toBe(2);
+  });
+
+  it('compares only the first 30 characters of a long cited title', () => {
+    // The first 30 chars ("A Study of Graph Neural Networ") match; the endings differ
+    const paper: NormalizedPaper = {
+      source: 'Test',
+      title: 'A Study of Graph Neural Networks for Chemistry',
+    };
+    expect(calculateMatchScore(paper, { title: 'A Study of Graph Neural Networks in Social Media' })).toBe(3);
+    // A difference inside the first 30 chars is not a match
+    expect(calculateMatchScore(paper, { title: 'A Survey of Graph Neural Networks for Chemistry' })).toBe(0);
   });
 
   it('combines multiple scoring factors', () => {
@@ -158,6 +169,17 @@ describe('findBestMatch', () => {
     expect(result.score).toBe(5);
   });
 
+  it('performs early exit at score ≥8 even if a later paper would score higher', () => {
+    const papers: NormalizedPaper[] = [
+      { source: 'Eight', title: 'Test Paper', year: 2023, authors: ['Smith'] },
+      { source: 'Ten', title: 'Test Paper', year: 2023, authors: ['Smith', 'Doe'] },
+    ];
+    const result = findBestMatch(papers, { title: 'Test Paper', year: 2023, authors: ['Smith', 'Doe'] });
+    // First paper: 3 + 3 + 2 = 8 hits the early exit, so the 10-point paper is never scored
+    expect(result.match?.source).toBe('Eight');
+    expect(result.score).toBe(8);
+  });
+
   it('performs early exit at score ≥8', () => {
     const papers: NormalizedPaper[] = [
       {
@@ -181,5 +203,28 @@ describe('findBestMatch', () => {
     });
     expect(result.match?.source).toBe('Perfect');
     expect(result.score).toBe(8);
+  });
+});
+
+describe('identity matching with blank input', () => {
+  const unrelated: NormalizedPaper = {
+    source: 'CrossRef',
+    title: 'Prayer Basket',
+    authors: ['Ann Other'],
+    year: 2019,
+  };
+
+  it.each([
+    ['an empty author', { authors: [''] }],
+    ['an author with a trailing space', { authors: ['Zzyzx '] }],
+    ['a whitespace-only title', { title: ' ' }],
+  ])('CURRENT BEHAVIOUR (suspected bug): %s matches any paper', (_label, filters) => {
+    // The last name of "Zzyzx " is "" (split on ' '), and every string includes "" and " ";
+    // so blank input counts as an identity match and, with the year, verifies an unrelated paper
+    expect(hasIdentityMatch(unrelated, filters)).toBe(true);
+
+    const result = findBestMatch([unrelated], { title: 'Quantum Basket Weaving Guilds', ...filters, year: 2019 });
+    expect(result.match?.source).toBe('CrossRef');
+    expect(result.score).toBeGreaterThanOrEqual(5);
   });
 });

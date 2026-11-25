@@ -80,6 +80,91 @@ describe('verifyCitation tool (scoring paths)', () => {
     expect(parsed.message).toContain('verify details match');
   });
 
+  it('reports medium confidence just below the high-confidence threshold (title + adjacent year = 4)', async () => {
+    mockCrossRefOnly([{ title: ['Deep Learning'], published: { 'date-parts': [[2016]] }, DOI: '10.1/dl' }]);
+
+    const parsed = parse(await verifyCitation({ title: 'Deep Learning', year: 2015 }));
+
+    expect(parsed).toMatchObject({ verified: true, confidence: 'medium' });
+  });
+
+  it('verifies with high confidence on author and exact year alone (2 + 3 = 5)', async () => {
+    mockCrossRefOnly([{
+      title: ['Differently Worded Title'],
+      author: [{ given: 'Yann', family: 'LeCun' }],
+      published: { 'date-parts': [[2015]] },
+      DOI: '10.1/lecun',
+    }]);
+
+    const parsed = parse(await verifyCitation({ title: 'Deep Learning', authors: ['LeCun'], year: 2015 }));
+
+    expect(parsed).toMatchObject({ verified: true, confidence: 'high', doi: '10.1/lecun' });
+  });
+
+  it.each(['http://doi.org/10.1/x', 'doi.org/10.1/x', 'https://doi.org/10.1/x'])(
+    'strips the resolver prefix from %s before resolving',
+    async (doi) => {
+      mockFetch.mockImplementation(() => ok({ title: 'T', DOI: '10.1/x' }));
+
+      await verifyCitation({ doi });
+
+      expect(mockFetch.mock.calls[0][0]).toBe('https://doi.org/10.1/x');
+    },
+  );
+
+  it('falls back to database search when doi.org returns a body that is not JSON', async () => {
+    // e.g. a publisher landing page when content negotiation is not supported
+    mockFetch.mockImplementation((url: string) => {
+      if (url.startsWith('https://doi.org/')) {
+        return Promise.resolve({ ok: true, json: () => Promise.reject(new SyntaxError('Unexpected token <')) });
+      }
+      if (url.includes('crossref')) return ok({ message: { items: [{ title: ['Deep Learning'], DOI: '10.1/dl' }] } });
+      return ok({});
+    });
+
+    const parsed = parse(await verifyCitation({ doi: '10.1/landing', title: 'Deep Learning' }));
+
+    expect(parsed).toMatchObject({ verified: true, source: 'CrossRef', doi: '10.1/dl' });
+  });
+
+  it('CURRENT BEHAVIOUR (suspected bug): verifies a resolvable DOI even when its metadata contradicts the cited title and authors', async () => {
+    // The DOI path never scores the metadata against the citation, so a fabricated title
+    // attached to a real DOI comes back "verified"
+    mockFetch.mockImplementation(() => ok({
+      title: 'Deep learning',
+      author: [{ given: 'Yann', family: 'LeCun' }],
+      issued: { 'date-parts': [[2015]] },
+      DOI: '10.1038/nature14539',
+    }));
+
+    const parsed = parse(await verifyCitation({
+      doi: '10.1038/nature14539',
+      title: 'Quantum Entanglement in Medieval Basket Weaving Guilds',
+      authors: ['Zzyzx'],
+      year: 1999,
+    }));
+
+    expect(parsed).toMatchObject({ verified: true, source: 'DOI.org', title: 'Deep learning' });
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('CURRENT BEHAVIOUR (suspected bug): an empty author name verifies an unrelated paper from the same year', async () => {
+    mockCrossRefOnly([{
+      title: ['Prayer Basket'],
+      author: [{ given: 'Ann', family: 'Other' }],
+      published: { 'date-parts': [[2019]] },
+      DOI: '10.1525/x',
+    }]);
+
+    const parsed = parse(await verifyCitation({
+      title: 'Quantum Entanglement in Medieval Basket Weaving Guilds',
+      authors: [''],
+      year: 2019,
+    }));
+
+    expect(parsed).toMatchObject({ verified: true, confidence: 'high', doi: '10.1525/x' });
+  });
+
   it('returns possible matches when the best score is below the match threshold', async () => {
     mockCrossRefOnly([{ title: ['Something Else Entirely'], DOI: '10.1/other' }]);
 
