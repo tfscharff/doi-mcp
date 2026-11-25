@@ -100,6 +100,28 @@ describe('searchMultipleSources', () => {
     expect(errors).toEqual([{ database: 'CrossRef', code: 'API_ERROR', message: 'Unknown error' }]);
   });
 
+  it('reports a source whose response holds a malformed record, and keeps the other sources', async () => {
+    // One null record makes normalize throw; that source fails as a whole (its good record is lost)
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes('crossref')) return ok({ message: { items: [null, { title: ['Good'], DOI: '10.1/good' }] } });
+      return ok({ results: [{ title: 'OA', doi: 'https://doi.org/10.2/oa' }] });
+    });
+
+    const { results, errors } = await searchMultipleSources('test', { sources: ['crossref', 'openalex'] });
+
+    expect(results.map(r => r.title)).toEqual(['OA']);
+    expect(errors).toEqual([{ database: 'CrossRef', code: 'API_ERROR', message: expect.stringContaining('null') }]);
+  });
+
+  it('reports a source that answers with a null body', async () => {
+    mockFetch.mockImplementation(() => ok(null));
+
+    const { results, errors } = await searchMultipleSources('test', { sources: ['openalex'] });
+
+    expect(results).toEqual([]);
+    expect(errors).toEqual([{ database: 'OpenAlex', code: 'API_ERROR', message: expect.any(String) }]);
+  });
+
   it('fetches DOIs for PubMed results via efetch', async () => {
     mockFetch.mockImplementation((url: string) => {
       if (url.includes('esearch')) return ok({ esearchresult: { idlist: ['111'] } });
@@ -137,6 +159,16 @@ describe('deduplicatePapers', () => {
     ];
 
     expect(deduplicatePapers(papers).map(p => p.source)).toEqual(['A', 'C']);
+  });
+
+  it('CURRENT BEHAVIOUR (suspected bug): treats DOIs that differ only in case as different papers', () => {
+    // DOIs are case-insensitive, and OpenAlex lowercases them while CrossRef keeps the registrant's case
+    const papers = [
+      { source: 'CrossRef', doi: '10.1002/(SICI)1097-4636', title: 'One' },
+      { source: 'OpenAlex', doi: '10.1002/(sici)1097-4636', title: 'One' },
+    ];
+
+    expect(deduplicatePapers(papers)).toHaveLength(2);
   });
 
   it('drops papers with neither DOI nor title', () => {

@@ -160,4 +160,16 @@ describe('batchVerifyCitations tool (DOI-only scope)', () => {
 
     expect(parsed.results[0].paper.doi).toBe('10.1/requested');
   });
+
+  it('CURRENT BEHAVIOUR (suspected bug): a DOI-resolved result has no doiUrl, unlike a search-verified one', async () => {
+    // README promises `paper` (including `doiUrl`); the DOI path returns the raw normalized paper,
+    // with `abstract` instead of `abstractFromArticle` and no `doiUrl`
+    mockFetch.mockImplementation(() => ok({ title: 'T', DOI: '10.1/x', abstract: 'A' }));
+
+    const parsed = parse(await batchVerifyCitations({ citations: [{ id: 'd', doi: '10.1/x' }] }));
+
+    expect(parsed.results[0].paper).toMatchObject({ doi: '10.1/x', abstract: 'A' });
+    expect(parsed.results[0].paper.doiUrl).toBeUndefined();
+    expect(parsed.results[0].paper.abstractFromArticle).toBeUndefined();
+  });
 });
